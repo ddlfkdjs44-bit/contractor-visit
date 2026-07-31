@@ -111,7 +111,11 @@ function renderForm(){
         <div><div class="field-lbl">희망 시작일</div><input type="date" class="m-in" id="f-start" value="${todayStr()}"></div>
         <div><div class="field-lbl">희망 종료일</div><input type="date" class="m-in" id="f-end" value="${todayStr()}"></div>
       </div>
-      <div class="m-block"><div class="field-lbl">신청 제목</div><input type="text" class="m-in" id="f-title" placeholder="예: 변압기 출하검사 입회 요청"></div>
+      <div class="m-block"><div class="field-lbl">프로젝트명</div><input type="text" class="m-in" id="f-project" placeholder="예: AWS 데이터센터"></div>
+      <div class="row2">
+        <div><div class="field-lbl">신청 제목</div><input type="text" class="m-in" id="f-title" placeholder="예: 변압기 출하검사 입회 요청"></div>
+        <div><div class="field-lbl">대수 (선택)</div><input type="number" min="0" class="m-in" id="f-qty" placeholder="예: 3"></div>
+      </div>
       <div class="m-block"><div class="field-lbl">신청자 성함</div><input type="text" class="m-in" id="f-requester" placeholder="예: 홍길동"></div>
       <div class="m-block"><div class="field-lbl">비고 (선택)</div><textarea class="m-ta" id="f-memo" placeholder="준비물, 특이사항 등"></textarea></div>
       <div id="msg-area"></div>
@@ -160,7 +164,7 @@ function renderMyRequests(){
       const d=r.data, mm=d.date.split('-')[1], dd=d.date.split('-')[2];
       const rangeTxt = (d.endDate&&d.endDate!==d.date) ? `${+mm}/${+dd}~${d.endDate.split('-').slice(1).map(Number).join('/')}` : `${+mm}/${+dd}`;
       return `<div class="myreq-row">
-        <div><div class="myreq-title">${esc(d.title||'(제목 없음)')}</div><div class="myreq-date">${rangeTxt} · 대기중</div></div>
+        <div><div class="myreq-title">${d.project?`[${esc(d.project)}] `:''}${esc(d.title||'(제목 없음)')}${d.qty?` · ${d.qty}대`:''}</div><div class="myreq-date">${rangeTxt} · 대기중</div></div>
         <button class="myreq-del" onclick="deleteMyRequest('${r.id}')">🗑 삭제</button>
       </div>`;
     }).join('');
@@ -187,11 +191,15 @@ function showMsg(text,type){
 function submitRequest(){
   const start=document.getElementById('f-start').value;
   const end=document.getElementById('f-end').value || start;
+  const project=document.getElementById('f-project').value.trim();
   const title=document.getElementById('f-title').value.trim();
+  const qtyRaw=document.getElementById('f-qty').value;
+  const qty=qtyRaw===''?null:Math.max(0,parseInt(qtyRaw,10)||0);
   const requester=document.getElementById('f-requester').value.trim();
   const memo=document.getElementById('f-memo').value.trim();
   if(!start){showMsg('희망 시작일을 선택해주세요.','error');return;}
   if(end<start){showMsg('종료일이 시작일보다 빠를 수 없어요.','error');return;}
+  if(!project){showMsg('프로젝트명을 입력해주세요.','error');return;}
   if(!title){showMsg('신청 제목을 입력해주세요.','error');return;}
   if(!requester){showMsg('신청자 성함을 입력해주세요.','error');return;}
 
@@ -203,7 +211,9 @@ function submitRequest(){
     companyName: company.name,
     date: start,
     endDate: end,
+    project: project,
     title: title,
+    qty: qty,
     requester: requester,
     memo: memo,
     status: 'pending',

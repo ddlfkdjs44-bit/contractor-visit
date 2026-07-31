@@ -61,6 +61,7 @@
   .req-status.rejected{background:rgba(139,143,151,.15);color:#5c6068;}
   .req-title{font-size:14px;font-weight:600;margin-bottom:4px;}
   .req-meta{font-size:12px;color:var(--ink-soft);margin-bottom:2px;}
+  .req-qty{font-size:11px;font-weight:700;color:var(--accent-deep);background:var(--accent-tint,rgba(14,107,115,.1));padding:1px 8px;border-radius:20px;}
   .req-memo{font-size:12px;color:var(--ink-faint);margin-top:6px;white-space:pre-wrap;}
   .req-actions{display:flex;gap:8px;margin-top:12px;}
   .btn-approve{font-family:inherit;font-size:12.5px;font-weight:700;background:#5a9e2f;color:#fff;border:none;padding:8px 15px;border-radius:9px;cursor:pointer;}
@@ -231,7 +232,7 @@ function reqCardHtml(r){
       <span class="req-date">${fmtDate(r)}</span>
       <span class="req-status ${r.status}">${stLabel}</span>
     </div>
-    <div class="req-title">${esc(r.title||'(제목 없음)')}</div>
+    <div class="req-title">${r.project?`[${esc(r.project)}] `:''}${esc(r.title||'(제목 없음)')}${r.qty?` <span class="req-qty">${r.qty}대</span>`:''}</div>
     <div class="req-meta">신청자: ${esc(r.requester||'-')}</div>
     ${r.memo?`<div class="req-memo">${esc(r.memo)}</div>`:''}
     ${r.adminNote?`<div class="req-memo">📝 관리자 메모: ${esc(r.adminNote)}</div>`:''}
@@ -260,6 +261,7 @@ function approveReq(id){
   }).then(()=>{
     return db.collection('visits').add({
       companyId:r.companyId, title:r.title, date:r.date, endDate:r.endDate||r.date,
+      project:r.project||'', qty:r.qty??null,
       memo:r.memo||'', attendee:r.requester||'', status:'예정', fromRequestId:id,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -310,7 +312,7 @@ function renderVisitsTab(body){
         <span class="req-date">${fmtDate(v)}</span>
         <span class="req-status approved">예정</span>
       </div>
-      <div class="req-title">${esc(v.title||'(제목 없음)')}</div>
+      <div class="req-title">${v.project?`[${esc(v.project)}] `:''}${esc(v.title||'(제목 없음)')}${v.qty?` <span class="req-qty">${v.qty}대</span>`:''}</div>
       <div class="req-meta">입회자: ${esc(v.attendee||'-')}</div>
       ${v.memo?`<div class="req-memo">${esc(v.memo)}</div>`:''}
       ${actionsHtml}

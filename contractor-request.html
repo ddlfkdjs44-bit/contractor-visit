@@ -1,4 +1,4 @@
-<!-- 외주협력사 입회 신청 페이지 v1 — Firebase Firestore 연동. 협력사는 로그인 없이 고유 링크(?co=업체ID)로 접속해 신청만 등록합니다. -->
+<!-- 외주협력사 입회 신청 페이지 v2 — Firebase Firestore 연동. 협력사는 로그인 없이 고유 링크(?co=업체ID)로 접속해 신청만 등록합니다. -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -22,6 +22,15 @@
   .head .mark{width:38px;height:38px;border-radius:11px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
   .head h1{font-size:16px;font-weight:800;margin:0;}
   .head .sub{font-size:12px;color:var(--ink-faint);margin-top:1px;}
+  .notif-bellbtn{position:relative;margin-left:auto;background:none;border:none;font-size:18px;cursor:pointer;padding:6px;border-radius:9px;flex-shrink:0;}
+  .notif-bellbtn:hover{background:var(--bg);}
+  .notif-badge{position:absolute;top:0;right:0;background:#c0392b;color:#fff;font-size:9.5px;font-weight:700;min-width:15px;height:15px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;}
+  .notif-panel{display:none;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:10px;margin:-6px 0 16px;}
+  .notif-panel.show{display:flex;}
+  .notif-item{background:var(--paper);border:1px solid var(--line-soft);border-radius:9px;padding:8px 10px;}
+  .notif-title{font-size:12.5px;font-weight:700;color:var(--ink);}
+  .notif-msg{font-size:11.5px;color:var(--ink-soft);margin-top:3px;white-space:pre-wrap;line-height:1.5;}
+  .notif-empty{font-size:12px;color:var(--ink-faint);text-align:center;padding:10px 0;}
   .field-lbl{font-size:11.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.02em;margin-bottom:6px;}
   .m-block{margin-bottom:14px;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
@@ -50,12 +59,11 @@
   .myreq-list{display:flex;flex-direction:column;gap:8px;}
   .myreq-loading{font-size:12px;color:var(--ink-faint);}
   .myreq-err{font-size:12px;color:#c0392b;background:rgba(210,84,58,.08);border-radius:9px;padding:9px 12px;}
-  .myreq-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;}
+  .myreq-row{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;}
   .myreq-title{font-size:13px;font-weight:600;color:var(--ink);}
   .myreq-date{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
   .myreq-del{flex-shrink:0;font-family:inherit;font-size:12px;font-weight:600;color:#c0392b;background:none;border:1px solid #c0392b;padding:6px 10px;border-radius:7px;cursor:pointer;}
   .myreq-del:hover{background:#c0392b;color:#fff;}
-  .myreq-row{align-items:flex-start;}
   .myreq-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:1.5px 8px;border-radius:20px;margin-left:2px;}
   .myreq-badge.ok{background:rgba(90,158,47,.15);color:#3d6e1e;}
   .myreq-badge.no{background:rgba(210,84,58,.12);color:#c0392b;}
@@ -66,6 +74,9 @@
   .tabbar button.on{background:var(--paper);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.08);}
   /* ── 우리 회사 일정 캘린더 (읽기 전용) ── */
   .cal-loading{font-size:12.5px;color:var(--ink-faint);text-align:center;padding:30px 0;}
+  .cal-modetoggle{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:2px;margin-bottom:10px;width:fit-content;}
+  .cal-modetoggle button{font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);background:none;border:none;padding:5px 12px;border-radius:7px;cursor:pointer;}
+  .cal-modetoggle button.on{background:var(--paper);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.08);}
   .cal-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px;}
   .cal-navbtn{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);cursor:pointer;font-size:13px;}
   .cal-navbtn:hover{border-color:var(--accent);color:var(--accent);}
@@ -84,6 +95,19 @@
   .cal-legend{font-size:10.5px;color:var(--ink-faint);text-align:center;margin-top:10px;}
   .cal-legend-cancel{text-decoration:line-through;}
   .cal-empty{font-size:12.5px;color:var(--ink-faint);text-align:center;padding:14px 0;}
+  .week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .week-col{border:1px solid var(--line-soft);border-radius:8px;padding:5px 4px;min-height:150px;}
+  .week-col.today{border-color:var(--accent);background:rgba(var(--accent-rgb),.06);}
+  .week-col-head{text-align:center;margin-bottom:5px;padding-bottom:5px;border-bottom:1px solid var(--line-soft);}
+  .week-col-dow{display:block;font-size:9px;color:var(--ink-faint);font-weight:700;}
+  .week-col-date{display:block;font-size:12px;font-weight:700;color:var(--ink);}
+  .week-col.today .week-col-date{color:var(--accent-deep);}
+  .week-col-body{display:flex;flex-direction:column;gap:3px;}
+  .week-item{background:var(--accent);color:#fff;border-radius:5px;padding:3px 4px;cursor:pointer;}
+  .week-item-cancel{background:var(--ink-faint);text-decoration:line-through;}
+  .week-item-time{font-size:8px;font-weight:700;opacity:.9;}
+  .week-item-title{font-size:9px;line-height:1.35;word-break:break-word;}
+  .week-empty{font-size:9px;color:var(--ink-faint);text-align:center;padding-top:8px;}
   /* ── 일정 상세 팝업 ── */
   .detail-scrim{position:fixed;inset:0;background:rgba(20,22,26,.42);display:none;align-items:center;justify-content:center;z-index:60;padding:16px;}
   .detail-scrim.show{display:flex;}
@@ -136,6 +160,49 @@ function myReqIds(){try{return JSON.parse(localStorage.getItem(lsKey())||'[]');}
 function addMyReqId(id){const list=myReqIds();list.unshift(id);localStorage.setItem(lsKey(), JSON.stringify(list.slice(0,30)));}
 function removeMyReqId(id){localStorage.setItem(lsKey(), JSON.stringify(myReqIds().filter(x=>x!==id)));}
 
+/* ══════════════ 알림 (확정 일정 변경 등, 회사 전체 공유) ══════════════ */
+let allNotifs=[];
+function notifKey(){return 'notifSeen_'+companyId;}
+function seenNotifIds(){try{return new Set(JSON.parse(localStorage.getItem(notifKey())||'[]'));}catch(e){return new Set();}}
+function markNotifsSeen(ids){
+  const seen=seenNotifIds();
+  ids.forEach(id=>seen.add(id));
+  localStorage.setItem(notifKey(), JSON.stringify([...seen].slice(-200)));
+}
+function notifMillis(n){
+  if(!n.createdAt)return 0;
+  if(typeof n.createdAt.toMillis==='function')return n.createdAt.toMillis();
+  if(n.createdAt.seconds)return n.createdAt.seconds*1000;
+  return 0;
+}
+function loadNotifs(){
+  db.collection('notifications').where('companyId','==',companyId).get().then(snap=>{
+    allNotifs = snap.docs.map(d=>Object.assign({id:d.id}, d.data())).sort((a,b)=>notifMillis(b)-notifMillis(a));
+    renderBellBadge();
+  }).catch(()=>{});
+}
+function renderBellBadge(){
+  const seen=seenNotifIds();
+  const unread=allNotifs.filter(n=>!seen.has(n.id)).length;
+  const badge=document.getElementById('notif-badge');
+  if(!badge)return;
+  if(unread>0){badge.textContent=unread>9?'9+':unread;badge.style.display='inline-flex';}
+  else{badge.style.display='none';}
+}
+function toggleNotifPanel(){
+  const panel=document.getElementById('notif-panel');
+  if(!panel)return;
+  const willShow=!panel.classList.contains('show');
+  panel.classList.toggle('show');
+  if(willShow){
+    panel.innerHTML = allNotifs.length ? allNotifs.slice(0,25).map(n=>
+      `<div class="notif-item"><div class="notif-title">${esc(n.title||'')}</div><div class="notif-msg">${esc(n.message||'')}</div></div>`
+    ).join('') : '<div class="notif-empty">알림이 없어요.</div>';
+    markNotifsSeen(allNotifs.map(n=>n.id));
+    renderBellBadge();
+  }
+}
+
 function renderError(msg){
   document.getElementById('card').innerHTML = `<div class="state-error">⚠️ ${esc(msg)}</div>`;
 }
@@ -148,7 +215,9 @@ function renderShell(){
     <div class="head">
       <span class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span>
       <div><h1>입회 일정 신청</h1><div class="sub">협력사 신청 → 담당자 확인 후 승인</div></div>
+      <button class="notif-bellbtn" id="notif-bellbtn" onclick="toggleNotifPanel()">🔔<span id="notif-badge" class="notif-badge" style="display:none;"></span></button>
     </div>
+    <div id="notif-panel" class="notif-panel"></div>
     <div class="company-badge">
       <span class="dot" style="background:${company.color||'#0e6b73'}"></span>
       <div><b>${esc(company.name)}</b><br><span>이 링크로 신청하면 자동으로 업체가 지정돼요</span></div>
@@ -159,6 +228,7 @@ function renderShell(){
     </div>
     <div id="body-area"></div>`;
   if(pageMode==='form') renderForm(); else renderCalendar();
+  loadNotifs();
 }
 
 function renderForm(){
@@ -173,6 +243,7 @@ function renderForm(){
         <div><div class="field-lbl">신청 제목</div><input type="text" class="m-in" id="f-title" placeholder="예: 변압기 출하검사 입회 요청"></div>
         <div><div class="field-lbl">대수 (선택)</div><input type="number" min="0" class="m-in" id="f-qty" placeholder="예: 3"></div>
       </div>
+      <div class="m-block"><div class="field-lbl">희망 시간 (선택)</div><input type="text" class="m-in" id="f-time" placeholder="예: 14:00 / 오전 10시"></div>
       <div class="m-block"><div class="field-lbl">신청자 성함</div><input type="text" class="m-in" id="f-requester" placeholder="예: 홍길동"></div>
       <div class="m-block"><div class="field-lbl">비고 (선택)</div><textarea class="m-ta" id="f-memo" placeholder="준비물, 특이사항 등"></textarea></div>
       <div id="msg-area"></div>
@@ -196,7 +267,8 @@ function renderSuccess(){
 
 function reqRangeTxt(d){
   const mm=d.date.split('-')[1], dd=d.date.split('-')[2];
-  return (d.endDate&&d.endDate!==d.date) ? `${+mm}/${+dd}~${d.endDate.split('-').slice(1).map(Number).join('/')}` : `${+mm}/${+dd}`;
+  const range=(d.endDate&&d.endDate!==d.date) ? `${+mm}/${+dd}~${d.endDate.split('-').slice(1).map(Number).join('/')}` : `${+mm}/${+dd}`;
+  return d.time?`${range} · ${d.time}`:range;
 }
 function reqTitleTxt(d){
   return `${d.project?`[${esc(d.project)}] `:''}${esc(d.title||'(제목 없음)')}${d.qty?` · ${d.qty}대`:''}`;
@@ -214,9 +286,9 @@ function renderMyRequests(){
   )).then(results=>{
     const shown=[]; let hadError=false;
     results.forEach(r=>{
-      if(!r.fetched){ hadError=true; return; } // 조회 실패(네트워크 등) — 목록에서 지우지 않고 이번엔 그냥 넘어감
-      if(!r.exists){ removeMyReqId(r.id); return; } // 관리자가 실제로 삭제한 건만 목록에서 제거
-      shown.push(r); // 대기중 / 승인됨 / 거절됨 다 보여줌
+      if(!r.fetched){ hadError=true; return; }
+      if(!r.exists){ removeMyReqId(r.id); return; }
+      shown.push(r);
     });
     const listEl=document.getElementById('myreq-list');
     if(!listEl)return;
@@ -247,38 +319,55 @@ function renderMyRequests(){
 
 /* ══════════════ 우리 회사 일정 (확정된 입회 일정, 읽기 전용 캘린더) ══════════════ */
 let calView=new Date();
+let calMode='month'; // 'month' | 'week'
+let calWeekStart=weekStartOf(new Date());
 let companyVisits=[];
 function parseD(s){const[y,m,dd]=s.split('-').map(Number);return new Date(y,m-1,dd);}
 function dnum(d){return Math.floor(d.getTime()/86400000);}
+function weekStartOf(d){const r=new Date(d);r.setDate(r.getDate()-r.getDay());return r;}
 const WD=['일','월','화','수','목','금','토'];
 
 function renderCalendar(){
   document.getElementById('body-area').innerHTML = `<div class="cal-loading">불러오는 중…</div>`;
   db.collection('visits').where('companyId','==',companyId).get().then(snap=>{
     companyVisits = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
-    document.getElementById('body-area').innerHTML = calendarHtml();
+    document.getElementById('body-area').innerHTML = calMode==='week'?weekViewHtml():calendarHtml();
   }).catch(err=>{
     document.getElementById('body-area').innerHTML = `<div class="myreq-err">불러오지 못했어요: ${esc(err.message)}</div>`;
   });
 }
 function shiftCal(n){ calView=new Date(calView.getFullYear(), calView.getMonth()+n, 1); document.getElementById('body-area').innerHTML=calendarHtml(); }
+function shiftWeek(n){ calWeekStart=new Date(calWeekStart); calWeekStart.setDate(calWeekStart.getDate()+n*7); document.getElementById('body-area').innerHTML=weekViewHtml(); }
+function setCalMode(m){
+  calMode=m;
+  if(m==='week')calWeekStart=weekStartOf(calView);
+  document.getElementById('body-area').innerHTML = calMode==='week'?weekViewHtml():calendarHtml();
+}
+function calModeToggle(){
+  return `<div class="cal-modetoggle">
+    <button class="${calMode==='month'?'on':''}" onclick="setCalMode('month')">월간</button>
+    <button class="${calMode==='week'?'on':''}" onclick="setCalMode('week')">주간</button>
+  </div>`;
+}
 
 function openVisitDetail(id){
   const v=companyVisits.find(x=>x.id===id); if(!v)return;
   const cancelled=v.status==='취소';
   const mm=v.date.split('-')[1], dd=v.date.split('-')[2];
   const rangeTxt=(v.endDate&&v.endDate!==v.date)?`${v.date.split('-')[0]}. ${+mm}. ${+dd} ~ ${v.endDate.split('-').slice(1).map(Number).join('. ')}`:`${v.date.split('-')[0]}. ${+mm}. ${+dd}`;
+  const stLabel={예정:'⏳ 예정',완료:'✅ 완료',연기:'↻ 연기',취소:'✕ 취소'}[v.status]||v.status||'예정';
   const row=(lbl,val)=>`<div class="detail-row"><span class="detail-lbl">${lbl}</span><span class="detail-val">${esc(val)}</span></div>`;
   document.getElementById('detail-modal').innerHTML=`
     <div class="detail-head"><h3>${cancelled?'✕ 취소된 일정':'📅 확정 일정'}</h3><button class="detail-close" onclick="closeDetail()">✕</button></div>
     <div class="detail-body">
       ${row('날짜', rangeTxt)}
+      ${v.time?row('시간', v.time):''}
       ${v.project?row('프로젝트명', v.project):''}
       ${row('제목', v.title||'(제목 없음)')}
       ${v.qty?row('대수', v.qty+'대'):''}
       ${row('입회자', v.attendee||'미정')}
       ${v.memo?row('메모', v.memo):''}
-      ${row('상태', cancelled?'취소됨':'예정')}
+      ${row('상태', stLabel)}
     </div>`;
   document.getElementById('detail-scrim').classList.add('show');
 }
@@ -300,7 +389,7 @@ function calendarHtml(){
       const evs=companyVisits.filter(v=>v.date&&dnum(parseD(v.date))<=dnum(d)&&dnum(d)<=dnum(parseD(v.endDate||v.date)));
       const bars=evs.slice(0,3).map(v=>{
         const cancelled=v.status==='취소';
-        const txt=`${v.title||'(제목 없음)'}`;
+        const txt=`${v.time?v.time+' ':''}${v.title||'(제목 없음)'}`;
         return `<div class="cal-bar ${cancelled?'cal-bar-cancel':''}" onclick="event.stopPropagation();openVisitDetail('${v.id}')">${esc(txt)}</div>`;
       }).join('');
       const moreN=evs.length-3;
@@ -310,6 +399,7 @@ function calendarHtml(){
   }
   const hasAny = companyVisits.length>0;
   return `
+    ${calModeToggle()}
     <div class="cal-nav">
       <button class="cal-navbtn" onclick="shiftCal(-1)">‹</button>
       <span class="cal-month">${y}년 ${m+1}월</span>
@@ -318,6 +408,44 @@ function calendarHtml(){
     <div class="cal-weekdays">${WD.map(w=>`<div>${w}</div>`).join('')}</div>
     ${cells}
     ${hasAny?`<div class="cal-legend">진하게 표시된 항목이 확정된 일정이에요 (<span class="cal-legend-cancel">취소선</span>은 취소된 일정)</div>`:`<div class="cal-empty">아직 확정된 일정이 없어요.</div>`}
+  `;
+}
+
+function weekViewHtml(){
+  const start=new Date(calWeekStart);
+  const days=Array.from({length:7},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return d;});
+  const ts=todayStr();
+  const end=days[6];
+  const rangeLbl = start.getMonth()===end.getMonth()
+    ? `${start.getMonth()+1}월 ${start.getDate()}~${end.getDate()}일`
+    : `${start.getMonth()+1}월 ${start.getDate()}일 ~ ${end.getMonth()+1}월 ${end.getDate()}일`;
+  const cols=days.map(d=>{
+    const s=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const isToday=s===ts;
+    const evs=companyVisits.filter(v=>v.date&&dnum(parseD(v.date))<=dnum(d)&&dnum(d)<=dnum(parseD(v.endDate||v.date)))
+      .sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    const items=evs.length?evs.map(v=>{
+      const cancelled=v.status==='취소';
+      return `<div class="week-item ${cancelled?'week-item-cancel':''}" onclick="openVisitDetail('${v.id}')">
+        ${v.time?`<div class="week-item-time">${esc(v.time)}</div>`:''}
+        <div class="week-item-title">${esc(v.title||'(제목 없음)')}</div>
+      </div>`;
+    }).join(''):'<div class="week-empty">-</div>';
+    return `<div class="week-col ${isToday?'today':''}">
+      <div class="week-col-head"><span class="week-col-dow">${WD[d.getDay()]}</span><span class="week-col-date">${d.getDate()}</span></div>
+      <div class="week-col-body">${items}</div>
+    </div>`;
+  }).join('');
+  const hasAny = companyVisits.length>0;
+  return `
+    ${calModeToggle()}
+    <div class="cal-nav">
+      <button class="cal-navbtn" onclick="shiftWeek(-1)">‹</button>
+      <span class="cal-month">${rangeLbl}</span>
+      <button class="cal-navbtn" onclick="shiftWeek(1)">›</button>
+    </div>
+    <div class="week-grid">${cols}</div>
+    ${hasAny?`<div class="cal-legend">시간 있는 일정은 이른 시간 순으로 정렬돼요 (<span class="cal-legend-cancel">취소선</span>은 취소된 일정)</div>`:`<div class="cal-empty">아직 확정된 일정이 없어요.</div>`}
   `;
 }
 
@@ -345,6 +473,7 @@ function submitRequest(){
   const title=document.getElementById('f-title').value.trim();
   const qtyRaw=document.getElementById('f-qty').value;
   const qty=qtyRaw===''?null:Math.max(0,parseInt(qtyRaw,10)||0);
+  const time=document.getElementById('f-time').value.trim();
   const requester=document.getElementById('f-requester').value.trim();
   const memo=document.getElementById('f-memo').value.trim();
   if(!start){showMsg('희망 시작일을 선택해주세요.','error');return;}
@@ -364,6 +493,7 @@ function submitRequest(){
     project: project,
     title: title,
     qty: qty,
+    time: time,
     requester: requester,
     memo: memo,
     status: 'pending',

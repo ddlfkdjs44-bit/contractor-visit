@@ -29,6 +29,24 @@
   .m-block{margin-bottom:14px;}
   .m-in{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-family:inherit;font-size:14px;padding:10px 12px;outline:none;color:var(--ink);}
   .m-in:focus{border-color:var(--accent);background:var(--paper);}
+  .m-ta{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-family:inherit;font-size:13.5px;padding:9px 11px;outline:none;color:var(--ink);resize:vertical;min-height:60px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .status-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .status-grid button{font-family:inherit;font-size:13px;font-weight:600;padding:9px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink-soft);cursor:pointer;}
+  .status-grid button.on-todo{background:#c98a2c;color:#fff;border-color:#c98a2c;}
+  .status-grid button.on-done{background:#5a9e2f;color:#fff;border-color:#5a9e2f;}
+  .status-grid button.on-delay{background:#3a6fd2;color:#fff;border-color:#3a6fd2;}
+  .status-grid button.on-cancel{background:#8b8f97;color:#fff;border-color:#8b8f97;}
+  .scrim{position:fixed;inset:0;background:rgba(20,22,26,.42);display:none;align-items:center;justify-content:center;z-index:70;padding:16px;}
+  .scrim.show{display:flex;}
+  .modal{background:var(--paper);border-radius:16px;width:100%;max-width:440px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+  .m-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--paper);}
+  .m-head h3{margin:0;font-size:15px;font-weight:700;}
+  .m-close{width:28px;height:28px;border-radius:8px;border:none;background:var(--bg);cursor:pointer;color:var(--ink-soft);}
+  .m-body{padding:18px;}
+  .m-foot{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-top:1px solid var(--line);}
+  .m-del{font-family:inherit;font-size:12.5px;font-weight:600;color:#c0392b;background:none;border:none;cursor:pointer;padding:8px 4px;}
+  .m-save{font-family:inherit;font-size:13px;font-weight:700;background:var(--accent);color:#fff;border:none;padding:9px 18px;border-radius:9px;cursor:pointer;}
   .btn-submit{width:100%;font-family:inherit;font-size:14.5px;font-weight:700;background:var(--accent);color:#fff;border:none;padding:12px;border-radius:11px;cursor:pointer;margin-top:6px;}
   .btn-submit:hover{background:var(--accent-deep);}
   .msg{font-size:12.5px;padding:9px 12px;border-radius:9px;margin-bottom:12px;}
@@ -62,6 +80,8 @@
   .req-title{font-size:14px;font-weight:600;margin-bottom:4px;}
   .req-meta{font-size:12px;color:var(--ink-soft);margin-bottom:2px;}
   .req-qty{font-size:11px;font-weight:700;color:var(--accent-deep);background:var(--accent-tint,rgba(14,107,115,.1));padding:1px 8px;border-radius:20px;}
+  .visits-toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;cursor:pointer;}
+  .visits-toggle input{cursor:pointer;}
   .req-memo{font-size:12px;color:var(--ink-faint);margin-top:6px;white-space:pre-wrap;}
   .req-actions{display:flex;gap:8px;margin-top:12px;}
   .btn-approve{font-family:inherit;font-size:12.5px;font-weight:700;background:#5a9e2f;color:#fff;border:none;padding:8px 15px;border-radius:9px;cursor:pointer;}
@@ -85,6 +105,9 @@
 <body>
 <div id="root"><div style="padding:60px;text-align:center;color:var(--ink-faint);">불러오는 중…</div></div>
 <div class="toast" id="toast"></div>
+<div class="scrim" id="scrim" onclick="if(event.target===this)closeVisitEditor()">
+  <div class="modal" id="modal"></div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
@@ -100,6 +123,7 @@ const firebaseConfig = {
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
 };
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -228,7 +252,7 @@ function reqCardHtml(r){
     <div class="req-head">
       <span class="req-dot" style="background:${color}"></span>
       <span class="req-company">${esc(name)}</span>
-      <span class="req-date">${fmtDate(r)}</span>
+      <span class="req-date">${fmtDate(r)}${r.time?' · '+esc(r.time):''}</span>
       <span class="req-status ${r.status}">${stLabel}</span>
     </div>
     <div class="req-title">${r.project?`[${esc(r.project)}] `:''}${esc(r.title||'(제목 없음)')}${r.qty?` <span class="req-qty">${r.qty}대</span>`:''}</div>
@@ -251,9 +275,17 @@ function sendMail(to,subject,text){
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(err=>toast('메일 발송 요청 오류: '+err.message));
 }
+function pushNotification(companyId,title,message){
+  if(!companyId)return Promise.resolve();
+  return db.collection('notifications').add({
+    companyId, title, message,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(err=>console.error('알림 등록 오류:',err));
+}
 function approveReq(id){
   const r=requestsCache.find(x=>x.id===id); if(!r)return;
   const attendee=prompt('입회자 성함 (우리측에서 누가 가는지, 나중에 로컬 캘린더에서 수정 가능):','')||'';
+  const time=prompt('방문 시간 (선택, 예: 14:00 / 오전 10시. 비워도 됩니다):', r.time||'')||'';
   const note=prompt('승인 메모 (선택, 비워도 됩니다):','')||'';
   const company=companiesCache[r.companyId];
   db.collection('requests').doc(id).update({
@@ -261,7 +293,7 @@ function approveReq(id){
   }).then(()=>{
     return db.collection('visits').add({
       companyId:r.companyId, title:r.title, date:r.date, endDate:r.endDate||r.date,
-      project:r.project||'', qty:r.qty??null,
+      project:r.project||'', qty:r.qty??null, time:time,
       memo:r.memo||'', attendee:attendee, status:'예정', fromRequestId:id,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -269,6 +301,8 @@ function approveReq(id){
     toast('✅ 승인 처리했어요.');
     sendMail(notifyList(company), `[입회 승인] ${r.companyName||''} · ${fmtDate(r)}`,
       `${r.companyName||''}의 입회 일정이 승인되었습니다.\n\n제목: ${r.title||''}\n일자: ${fmtDate(r)}\n신청자: ${r.requester||'-'}${note?`\n관리자 메모: ${note}`:''}`);
+    pushNotification(r.companyId, `✅ 승인됨: ${r.title||''}`,
+      `${fmtDate(r)}${time?' · '+time:''} 일정이 승인되었습니다.${note?`\n담당자 메모: ${note}`:''}`);
   }).catch(err=>toast('오류: '+err.message));
 }
 function rejectReq(id){
@@ -281,6 +315,8 @@ function rejectReq(id){
     toast('거절 처리했어요.');
     sendMail(notifyList(company), `[입회 거절] ${r.companyName||''} · ${fmtDate(r)}`,
       `${r.companyName||''}의 입회 신청이 거절되었습니다.\n\n제목: ${r.title||''}\n일자: ${fmtDate(r)}\n신청자: ${r.requester||'-'}${note?`\n거절 사유: ${note}`:''}`);
+    pushNotification(r.companyId, `✕ 거절됨: ${r.title||''}`,
+      `${fmtDate(r)} 신청이 거절되었습니다.${note?`\n거절 사유: ${note}`:''}`);
   }).catch(err=>toast('오류: '+err.message));
 }
 function deleteReq(id){
@@ -294,23 +330,27 @@ function deleteReq(id){
 }
 
 /* ══════════════ 확정 일정(visits) 탭 — 변경·취소 ══════════════ */
+let showCancelledVisits=false;
+function toggleCancelledVisits(){showCancelledVisits=!showCancelledVisits;renderTabBody();}
 function renderVisitsTab(body){
-  const rows=visitsCache.filter(v=>v.status!=='취소').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  if(!rows.length){body.innerHTML='<div class="empty">확정된 일정이 없어요.</div>';return;}
-  body.innerHTML = rows.map(v=>{
+  const rows=visitsCache.filter(v=>showCancelledVisits||v.status!=='취소').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const toggleHtml = isAdmin() ? `<label class="visits-toggle"><input type="checkbox" ${showCancelledVisits?'checked':''} onchange="toggleCancelledVisits()"> 취소된 일정도 보기 (정리·완전삭제용)</label>` : '';
+  if(!rows.length){body.innerHTML=toggleHtml+'<div class="empty">확정된 일정이 없어요.</div>';return;}
+  body.innerHTML = toggleHtml + rows.map(v=>{
     const c=companiesCache[v.companyId];
     const color=c?c.color:'#999', name=c?c.name:'(삭제된 업체)';
+    const cancelled=v.status==='취소';
     const actionsHtml = isAdmin() ? `
       <div class="req-actions">
-        <button class="btn-approve" onclick="editVisit('${v.id}')">✎ 변경</button>
-        <button class="btn-reject" onclick="cancelVisit('${v.id}')">✕ 취소</button>
+        ${cancelled?'':'<button class="btn-approve" onclick="openVisitEditor(\''+v.id+'\')">✎ 변경</button><button class="btn-reject" onclick="cancelVisit(\''+v.id+'\')">✕ 취소</button>'}
+        <button class="btn-reject" onclick="deleteVisit('${v.id}')" title="기록을 완전히 지웁니다. 삭제된 협력사에 연결된 찌꺼기 데이터 정리에 사용하세요">🗑 완전 삭제</button>
       </div>`:'';
     return `<div class="req-card">
       <div class="req-head">
         <span class="req-dot" style="background:${color}"></span>
         <span class="req-company">${esc(name)}</span>
-        <span class="req-date">${fmtDate(v)}</span>
-        <span class="req-status approved">예정</span>
+        <span class="req-date">${fmtDate(v)}${v.time?' · '+esc(v.time):''}</span>
+        <span class="req-status ${cancelled?'rejected':'approved'}">${cancelled?'취소됨':'예정'}</span>
       </div>
       <div class="req-title">${v.project?`[${esc(v.project)}] `:''}${esc(v.title||'(제목 없음)')}${v.qty?` <span class="req-qty">${v.qty}대</span>`:''}</div>
       <div class="req-meta">입회자: ${esc(v.attendee||'-')}</div>
@@ -319,19 +359,99 @@ function renderVisitsTab(body){
     </div>`;
   }).join('');
 }
-function editVisit(id){
+function deleteVisit(id){
   const v=visitsCache.find(x=>x.id===id); if(!v)return;
-  const newDate=prompt('새 날짜 (YYYY-MM-DD):', v.date); if(newDate===null)return;
-  const newTitle=prompt('제목:', v.title||''); if(newTitle===null)return;
+  if(!confirm('이 확정 일정 기록을 완전히 삭제할까요?\n취소와 달리 기록이 아예 사라지며 되돌릴 수 없어요.'))return;
+  db.collection('visits').doc(id).delete().then(()=>toast('완전히 삭제했어요.')).catch(err=>toast('오류: '+err.message));
+}
+let visitEditId=null;
+function openVisitEditor(id){
+  visitEditId=id;
+  renderVisitEditor();
+  document.getElementById('scrim').classList.add('show');
+}
+function closeVisitEditor(){
+  visitEditId=null;
+  document.getElementById('scrim').classList.remove('show');
+}
+function renderVisitEditor(){
+  const v=visitsCache.find(x=>x.id===visitEditId); if(!v)return;
+  const c=companiesCache[v.companyId];
+  document.getElementById('modal').innerHTML=`
+    <div class="m-head"><h3>확정 일정 변경 — ${esc(c?c.name:'(삭제된 업체)')}</h3><button class="m-close" onclick="closeVisitEditor()">✕</button></div>
+    <div class="m-body">
+      <div class="row2">
+        <div><div class="field-lbl">날짜</div><input type="date" class="m-in" id="ve-date" value="${v.date}"></div>
+        <div><div class="field-lbl">종료일</div><input type="date" class="m-in" id="ve-end" value="${v.endDate||v.date}"></div>
+      </div>
+      <div class="m-block"><div class="field-lbl">방문 시간 (선택)</div><input type="text" class="m-in" id="ve-time" placeholder="예: 14:00 / 오전 10시" value="${esc(v.time||'')}"></div>
+      <div class="row2">
+        <div><div class="field-lbl">프로젝트명</div><input type="text" class="m-in" id="ve-project" value="${esc(v.project||'')}"></div>
+        <div><div class="field-lbl">대수</div><input type="number" min="0" class="m-in" id="ve-qty" value="${v.qty!=null?v.qty:''}"></div>
+      </div>
+      <div class="m-block"><div class="field-lbl">제목</div><input type="text" class="m-in" id="ve-title" value="${esc(v.title||'')}"></div>
+      <div class="m-block"><div class="field-lbl">입회자 (우리측)</div><input type="text" class="m-in" id="ve-attendee" value="${esc(v.attendee||'')}"></div>
+      <div class="m-block"><div class="field-lbl">상태</div>
+        <div class="status-grid">
+          <button type="button" class="${v.status==='예정'?'on-todo':''}" onclick="setVeStatus('예정')" id="ve-st-예정">⏳ 예정</button>
+          <button type="button" class="${v.status==='완료'?'on-done':''}" onclick="setVeStatus('완료')" id="ve-st-완료">✅ 완료</button>
+          <button type="button" class="${v.status==='연기'?'on-delay':''}" onclick="setVeStatus('연기')" id="ve-st-연기">↻ 연기</button>
+          <button type="button" class="${v.status==='취소'?'on-cancel':''}" onclick="setVeStatus('취소')" id="ve-st-취소">✕ 취소</button>
+        </div>
+      </div>
+      <div class="m-block"><div class="field-lbl">메모</div><textarea class="m-ta" id="ve-memo">${esc(v.memo||'')}</textarea></div>
+    </div>
+    <div class="m-foot">
+      <button class="m-del" onclick="deleteVisit('${v.id}');closeVisitEditor();">🗑 완전 삭제</button>
+      <button class="m-save" onclick="saveVisitEditor()">저장</button>
+    </div>`;
+  document.getElementById('modal').dataset.status=v.status||'예정';
+}
+function setVeStatus(s){
+  document.getElementById('modal').dataset.status=s;
+  ['예정','완료','연기','취소'].forEach(k=>{
+    const btn=document.getElementById('ve-st-'+k);
+    const cls={'예정':'on-todo','완료':'on-done','연기':'on-delay','취소':'on-cancel'}[k];
+    if(btn)btn.className = k===s?cls:'';
+  });
+}
+function saveVisitEditor(){
+  const v=visitsCache.find(x=>x.id===visitEditId); if(!v)return;
+  const before={date:v.date,endDate:v.endDate||v.date,time:v.time||'',project:v.project||'',qty:v.qty,title:v.title||'',attendee:v.attendee||'',status:v.status};
+  const after={
+    date:document.getElementById('ve-date').value,
+    endDate:document.getElementById('ve-end').value,
+    time:document.getElementById('ve-time').value.trim(),
+    project:document.getElementById('ve-project').value.trim(),
+    qty:(function(){const s=document.getElementById('ve-qty').value;return s===''?null:Math.max(0,parseInt(s,10)||0);})(),
+    title:document.getElementById('ve-title').value.trim(),
+    attendee:document.getElementById('ve-attendee').value.trim(),
+    memo:document.getElementById('ve-memo').value.trim(),
+    status:document.getElementById('modal').dataset.status||v.status,
+  };
   const company=companiesCache[v.companyId];
-  db.collection('visits').doc(id).update({
-    date:newDate, endDate:newDate, title:newTitle,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(()=>{
-    toast('일정을 변경했어요.');
-    sendMail(notifyList(company), `[입회 일정 변경] ${company?company.name:''} · ${newDate}`,
-      `입회 일정이 변경되었습니다.\n\n변경 전: ${v.title||''} (${fmtDate(v)})\n변경 후: ${newTitle} (${newDate})`);
-  }).catch(err=>toast('오류: '+err.message));
+  const changes=[];
+  if(before.date!==after.date||before.endDate!==after.endDate){
+    const oldR=before.endDate&&before.endDate!==before.date?`${before.date}~${before.endDate}`:before.date;
+    const newR=after.endDate&&after.endDate!==after.date?`${after.date}~${after.endDate}`:after.date;
+    changes.push(`날짜: ${oldR} → ${newR}`);
+  }
+  if(before.time!==after.time)changes.push(`방문 시간: ${before.time||'-'} → ${after.time||'-'}`);
+  if(before.title!==after.title)changes.push(`제목: ${before.title||'-'} → ${after.title||'-'}`);
+  if(before.attendee!==after.attendee)changes.push(`입회자: ${before.attendee||'-'} → ${after.attendee||'-'}`);
+  if(before.status!==after.status)changes.push(`상태: ${before.status} → ${after.status}`);
+  if(String(before.qty)!==String(after.qty))changes.push(`대수: ${before.qty??'-'} → ${after.qty??'-'}`);
+
+  db.collection('visits').doc(v.id).update(Object.assign({},after,{updatedAt:firebase.firestore.FieldValue.serverTimestamp()}))
+    .then(()=>{
+      toast('저장했어요.');
+      closeVisitEditor();
+      if(changes.length){
+        sendMail(notifyList(company), `[입회 일정 변경] ${company?company.name:''} · ${after.title}`,
+          `입회 일정이 변경되었습니다.\n\n${changes.join('\n')}`);
+        pushNotification(v.companyId, `✎ 변경: ${after.title||'(제목 없음)'}`, changes.join('\n'));
+      }
+    }).catch(err=>toast('오류: '+err.message));
 }
 function cancelVisit(id){
   const v=visitsCache.find(x=>x.id===id); if(!v)return;
@@ -343,6 +463,7 @@ function cancelVisit(id){
     toast('일정을 취소했어요.');
     sendMail(notifyList(company), `[입회 일정 취소] ${company?company.name:''} · ${fmtDate(v)}`,
       `아래 입회 일정이 취소되었습니다.\n\n제목: ${v.title||''}\n일자: ${fmtDate(v)}`);
+    pushNotification(v.companyId, `✕ 취소됨: ${v.title||'(제목 없음)'}`, `${fmtDate(v)} 일정이 취소되었습니다.`);
   }).catch(err=>toast('오류: '+err.message));
 }
 

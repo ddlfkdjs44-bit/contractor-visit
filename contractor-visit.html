@@ -211,7 +211,9 @@ const firebaseConfig = {
   messagingSenderId: "335380660226",
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
-};let fbDb=null;
+};
+
+let fbDb=null;
 try{
   if(firebaseConfig.apiKey!=="YOUR_API_KEY"){
     firebase.initializeApp(firebaseConfig);

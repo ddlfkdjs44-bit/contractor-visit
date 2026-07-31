@@ -99,6 +99,7 @@ const firebaseConfig = {
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
 };
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -211,11 +212,18 @@ function reqCardHtml(r){
   const c=companiesCache[r.companyId];
   const color=c?c.color:'#999', name=c?c.name:(r.companyName||'(삭제된 업체)');
   const stLabel={pending:'대기중',approved:'승인됨',rejected:'거절됨'}[r.status]||r.status;
-  const actions = (r.status==='pending'&&isAdmin()) ? `
-    <div class="req-actions">
-      <button class="btn-approve" onclick="approveReq('${r.id}')">✅ 승인</button>
-      <button class="btn-reject" onclick="rejectReq('${r.id}')">✕ 거절</button>
-    </div>`:'';
+  let actions='';
+  if(isAdmin()){
+    if(r.status==='pending'){
+      actions = `<div class="req-actions">
+        <button class="btn-approve" onclick="approveReq('${r.id}')">✅ 승인</button>
+        <button class="btn-reject" onclick="rejectReq('${r.id}')">✕ 거절</button>
+        <button class="btn-reject" onclick="deleteReq('${r.id}')" title="협력사가 잘못 신청한 경우 등, 기록 없이 바로 삭제">🗑 삭제(실수신청)</button>
+      </div>`;
+    }else{
+      actions = `<div class="req-actions"><button class="btn-reject" onclick="deleteReq('${r.id}')">🗑 이 기록 삭제</button></div>`;
+    }
+  }
   return `<div class="req-card">
     <div class="req-head">
       <span class="req-dot" style="background:${color}"></span>
@@ -272,6 +280,15 @@ function rejectReq(id){
     sendMail(notifyList(company), `[입회 거절] ${r.companyName||''} · ${fmtDate(r)}`,
       `${r.companyName||''}의 입회 신청이 거절되었습니다.\n\n제목: ${r.title||''}\n일자: ${fmtDate(r)}\n신청자: ${r.requester||'-'}${note?`\n거절 사유: ${note}`:''}`);
   }).catch(err=>toast('오류: '+err.message));
+}
+function deleteReq(id){
+  const r=requestsCache.find(x=>x.id===id); if(!r)return;
+  const wasPending = r.status==='pending';
+  const msg = wasPending
+    ? `[${r.companyName||''}] ${r.title||'(제목 없음)'} 신청을 삭제할까요?\n\n거절과 달리 기록이 아예 남지 않아요 (협력사가 잘못 신청한 경우 등에 사용).`
+    : `[${r.companyName||''}] ${r.title||'(제목 없음)'} 기록을 삭제할까요?\n\n승인/거절 이력이 사라져요. 실수로 처리된 항목 정리용이에요.`;
+  if(!confirm(msg))return;
+  db.collection('requests').doc(id).delete().then(()=>toast('삭제했어요.')).catch(err=>toast('오류: '+err.message));
 }
 
 /* ══════════════ 확정 일정(visits) 탭 — 변경·취소 ══════════════ */
@@ -353,6 +370,7 @@ function renderCompaniesTab(body){
         <span class="comp-dot" style="background:${c.color||'#999'}"></span>
         <span class="comp-name">${esc(c.name)}</span>
         ${fields}
+        ${editable?`<button class="btn-reject" onclick="deleteCompany('${id}')" title="이 협력사 삭제">🗑 삭제</button>`:''}
       </div>
       <div class="link-row"><input readonly value="${requestLinkFor(id)}" onclick="this.select()"><button class="link-copy" onclick="copyLink('${id}')">복사</button></div>
     </div>`;
@@ -381,6 +399,15 @@ function addCompany(){
   const colors=['#0e6b73','#6d4ed6','#c98a2c','#5a9e2f','#e0483f','#3a6fd2','#a24fb0'];
   const color=colors[Object.keys(companiesCache).length % colors.length];
   db.collection('companies').doc(uid()).set({name:name.trim(),color,contact:'',phone:'',email:''}).then(()=>toast('협력사를 추가했어요.')).catch(err=>toast('오류: '+err.message));
+}
+function deleteCompany(id){
+  const c=companiesCache[id]; if(!c)return;
+  const inUse = requestsCache.some(r=>r.companyId===id) || visitsCache.some(v=>v.companyId===id);
+  const msg = inUse
+    ? `'${c.name}' 협력사를 삭제할까요?\n\n이미 등록된 신청/확정 일정 기록이 있어요 — 그 기록들은 남지만 업체명 대신 "(삭제된 업체)"로 표시돼요.`
+    : `'${c.name}' 협력사를 삭제할까요? 이 작업은 되돌릴 수 없어요.`;
+  if(!confirm(msg))return;
+  db.collection('companies').doc(id).delete().then(()=>toast(`'${c.name}' 삭제했어요.`)).catch(err=>toast('오류: '+err.message));
 }
 
 /* ══════════════ 직원 관리 탭 (관리자 전용) ══════════════ */
@@ -439,30 +466,37 @@ function saveInternalEmails(){
   db.collection('settings').doc('general').set({internalEmails:list},{merge:true}).then(()=>toast('저장했어요.')).catch(err=>toast('오류: '+err.message));
 }
 
-/* ══════════════ 실시간 구독 ══════════════ */
+/* ══════════════ 실시간 구독 (오류 시 자동 재시도) ══════════════ */
+function watchCollection(colRef, onData, label){
+  return colRef.onSnapshot(onData, err=>{
+    console.error(label+' 구독 오류:', err);
+    toast('⚠ '+label+' 불러오기 실패, 재시도 중…');
+    setTimeout(()=>{ unsubs.push(watchCollection(colRef, onData, label)); }, 1500);
+  });
+}
 function startListeners(){
-  unsubs.push(db.collection('companies').onSnapshot(snap=>{
+  unsubs.push(watchCollection(db.collection('companies'), snap=>{
     companiesCache={};
     snap.forEach(doc=>{companiesCache[doc.id]=doc.data();});
     renderTabBody();
-  }));
-  unsubs.push(db.collection('requests').onSnapshot(snap=>{
+  }, '협력사'));
+  unsubs.push(watchCollection(db.collection('requests'), snap=>{
     requestsCache = snap.docs.map(doc=>Object.assign({id:doc.id},doc.data()));
     renderDashboard();
-  }));
-  unsubs.push(db.collection('visits').onSnapshot(snap=>{
+  }, '신청 내역'));
+  unsubs.push(watchCollection(db.collection('visits'), snap=>{
     visitsCache = snap.docs.map(doc=>Object.assign({id:doc.id},doc.data()));
     renderTabBody();
-  }));
-  unsubs.push(db.collection('staff').onSnapshot(snap=>{
+  }, '확정 일정'));
+  unsubs.push(watchCollection(db.collection('staff'), snap=>{
     staffCache={};
     snap.forEach(doc=>{staffCache[doc.id]=doc.data();});
     renderTabBody();
-  }));
-  unsubs.push(db.collection('settings').doc('general').onSnapshot(doc=>{
+  }, '직원 목록'));
+  unsubs.push(watchCollection(db.collection('settings').doc('general'), doc=>{
     settingsCache = doc.exists ? Object.assign({internalEmails:[]},doc.data()) : {internalEmails:[]};
     renderTabBody();
-  }));
+  }, '설정'));
 }
 
 /* ══════════════ 권한 확인 (staff 등록 여부·역할) ══════════════ */

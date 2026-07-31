@@ -54,7 +54,17 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
 /* ══════════════ Firebase 설정 — 본인 프로젝트 값으로 교체하세요 ══════════════ */
-npm install firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyD7jN8RBv0preJmxNVBZwiacznq7-UdGM4",
+  authDomain: "contractor-visit.firebaseapp.com",
+  projectId: "contractor-visit",
+  storageBucket: "contractor-visit.firebasestorage.app",
+  messagingSenderId: "335380660226",
+  appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
+  measurementId: "G-YR2DSRJZFN"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 /* ══════════════ 상태 ══════════════ */
 const params = new URLSearchParams(location.search);

@@ -203,8 +203,15 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
 /* ══════════════ Firebase 설정 (관리자 승인 시스템과 동일한 프로젝트) — 값 넣으면 동기화 버튼이 활성화됩니다 ══════════════ */
-npm install firebase
-let fbDb=null;
+const firebaseConfig = {
+  apiKey: "AIzaSyD7jN8RBv0preJmxNVBZwiacznq7-UdGM4",
+  authDomain: "contractor-visit.firebaseapp.com",
+  projectId: "contractor-visit",
+  storageBucket: "contractor-visit.firebasestorage.app",
+  messagingSenderId: "335380660226",
+  appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
+  measurementId: "G-YR2DSRJZFN"
+};let fbDb=null;
 try{
   if(firebaseConfig.apiKey!=="YOUR_API_KEY"){
     firebase.initializeApp(firebaseConfig);

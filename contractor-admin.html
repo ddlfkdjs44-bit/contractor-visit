@@ -100,7 +100,6 @@ const firebaseConfig = {
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
 };
-
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -254,6 +253,7 @@ function sendMail(to,subject,text){
 }
 function approveReq(id){
   const r=requestsCache.find(x=>x.id===id); if(!r)return;
+  const attendee=prompt('입회자 성함 (우리측에서 누가 가는지, 나중에 로컬 캘린더에서 수정 가능):','')||'';
   const note=prompt('승인 메모 (선택, 비워도 됩니다):','')||'';
   const company=companiesCache[r.companyId];
   db.collection('requests').doc(id).update({
@@ -262,7 +262,7 @@ function approveReq(id){
     return db.collection('visits').add({
       companyId:r.companyId, title:r.title, date:r.date, endDate:r.endDate||r.date,
       project:r.project||'', qty:r.qty??null,
-      memo:r.memo||'', attendee:r.requester||'', status:'예정', fromRequestId:id,
+      memo:r.memo||'', attendee:attendee, status:'예정', fromRequestId:id,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }).then(()=>{

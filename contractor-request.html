@@ -45,6 +45,16 @@
   .success-wrap p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0 0 20px;}
   .btn-ghost{font-family:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);padding:9px 16px;border-radius:9px;cursor:pointer;}
   .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+  .myreq-head{font-size:12px;font-weight:700;color:var(--ink-faint);margin:22px 0 10px;padding-top:16px;border-top:1px solid var(--line);}
+  .myreq-head span{font-weight:500;color:var(--ink-faint);}
+  .myreq-list{display:flex;flex-direction:column;gap:8px;}
+  .myreq-loading{font-size:12px;color:var(--ink-faint);}
+  .myreq-err{font-size:12px;color:#c0392b;background:rgba(210,84,58,.08);border-radius:9px;padding:9px 12px;}
+  .myreq-row{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 12px;}
+  .myreq-title{font-size:13px;font-weight:600;color:var(--ink);}
+  .myreq-date{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
+  .myreq-del{flex-shrink:0;font-family:inherit;font-size:12px;font-weight:600;color:#c0392b;background:none;border:1px solid #c0392b;padding:6px 10px;border-radius:7px;cursor:pointer;}
+  .myreq-del:hover{background:#c0392b;color:#fff;}
 </style>
 </head>
 <body>
@@ -63,6 +73,7 @@ const firebaseConfig = {
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
 };
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
@@ -74,6 +85,12 @@ let company = null;
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function pad(n){return String(n).padStart(2,'0');}
 function todayStr(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+
+/* ══════════════ 내가 신청한 내역 (이 브라우저 기준, 로컬 저장) ══════════════ */
+function lsKey(){return 'myReqs_'+companyId;}
+function myReqIds(){try{return JSON.parse(localStorage.getItem(lsKey())||'[]');}catch(e){return [];}}
+function addMyReqId(id){const list=myReqIds();list.unshift(id);localStorage.setItem(lsKey(), JSON.stringify(list.slice(0,30)));}
+function removeMyReqId(id){localStorage.setItem(lsKey(), JSON.stringify(myReqIds().filter(x=>x!==id)));}
 
 function renderError(msg){
   document.getElementById('card').innerHTML = `<div class="state-error">⚠️ ${esc(msg)}</div>`;
@@ -99,7 +116,9 @@ function renderForm(){
       <div class="m-block"><div class="field-lbl">비고 (선택)</div><textarea class="m-ta" id="f-memo" placeholder="준비물, 특이사항 등"></textarea></div>
       <div id="msg-area"></div>
       <button class="btn-submit" id="submit-btn" onclick="submitRequest()">신청하기</button>
-    </div>`;
+    </div>
+    <div id="my-reqs"></div>`;
+  renderMyRequests();
 }
 
 function renderSuccess(){
@@ -109,8 +128,56 @@ function renderSuccess(){
       <h2>신청이 접수됐어요</h2>
       <p>담당자 확인 후 일정에 반영됩니다.<br>승인 여부는 별도로 안내받으실 수 있어요.</p>
       <button class="btn-ghost" onclick="renderForm()">다른 일정 신청하기</button>
-    </div>`;
+    </div>
+    <div id="my-reqs"></div>`;
+  renderMyRequests();
 }
+
+function renderMyRequests(){
+  const wrap=document.getElementById('my-reqs');
+  if(!wrap)return;
+  const ids=myReqIds();
+  if(!ids.length){wrap.innerHTML='';return;}
+  wrap.innerHTML=`<div class="myreq-head">📋 내가 신청한 내역 <span>(이 기기에서 신청한 것만 보여요)</span></div><div id="myreq-list" class="myreq-list"><div class="myreq-loading">불러오는 중…</div></div>`;
+  Promise.all(ids.map(id=>db.collection('requests').doc(id).get()
+    .then(doc=>({id, fetched:true, exists:doc.exists, data:doc.exists?doc.data():null}))
+    .catch(err=>({id, fetched:false, err}))
+  )).then(results=>{
+    const alive=[]; let hadError=false;
+    results.forEach(r=>{
+      if(!r.fetched){ hadError=true; return; } // 조회 실패(권한설정 문제 등) — 목록에서 지우지 않고 이번엔 그냥 넘어감
+      if(!r.exists || !r.data || r.data.status!=='pending'){ removeMyReqId(r.id); }
+      else alive.push(r);
+    });
+    const listEl=document.getElementById('myreq-list');
+    if(!listEl)return;
+    if(hadError && !alive.length){
+      document.getElementById('my-reqs').innerHTML = `<div class="myreq-head">📋 내가 신청한 내역</div><div class="myreq-err">불러오지 못했어요. 잠시 후 페이지를 새로고침해보세요.</div>`;
+      return;
+    }
+    if(!alive.length){document.getElementById('my-reqs').innerHTML='';return;}
+    listEl.innerHTML = alive.map(r=>{
+      const d=r.data, mm=d.date.split('-')[1], dd=d.date.split('-')[2];
+      const rangeTxt = (d.endDate&&d.endDate!==d.date) ? `${+mm}/${+dd}~${d.endDate.split('-').slice(1).map(Number).join('/')}` : `${+mm}/${+dd}`;
+      return `<div class="myreq-row">
+        <div><div class="myreq-title">${esc(d.title||'(제목 없음)')}</div><div class="myreq-date">${rangeTxt} · 대기중</div></div>
+        <button class="myreq-del" onclick="deleteMyRequest('${r.id}')">🗑 삭제</button>
+      </div>`;
+    }).join('');
+  });
+}
+
+function deleteMyRequest(id){
+  if(!confirm('이 신청을 삭제할까요?\n잘못 신청했을 때만 사용하세요.'))return;
+  db.collection('requests').doc(id).delete().then(()=>{
+    removeMyReqId(id);
+    toast_myreq('삭제했어요.');
+    renderMyRequests();
+  }).catch(err=>{
+    toast_myreq('삭제 실패: '+err.message);
+  });
+}
+function toast_myreq(msg){ showMsg(msg,'ok'); setTimeout(()=>{const el=document.getElementById('msg-area'); if(el)el.innerHTML='';},2500); }
 
 function showMsg(text,type){
   const el=document.getElementById('msg-area');
@@ -141,7 +208,8 @@ function submitRequest(){
     memo: memo,
     status: 'pending',
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(()=>{
+  }).then(docRef=>{
+    addMyReqId(docRef.id);
     renderSuccess();
   }).catch(err=>{
     btn.disabled=false; btn.textContent='신청하기';

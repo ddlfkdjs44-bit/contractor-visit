@@ -73,12 +73,15 @@
   .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;}
   .cal-weekdays div{text-align:center;font-size:9.5px;font-weight:700;color:var(--ink-faint);}
   .cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;}
-  .cal-cell{position:relative;min-height:52px;border:1px solid var(--line-soft);border-radius:6px;padding:3px 3px;overflow:hidden;}
+  .cal-cell{position:relative;min-height:66px;border:1px solid var(--line-soft);border-radius:6px;padding:3px 3px;overflow:hidden;}
   .cal-cell.muted{opacity:.35;}
   .cal-cell.today{border-color:var(--accent);background:rgba(var(--accent-rgb),.06);}
   .cal-dnum{font-size:9.5px;font-weight:600;color:var(--ink-soft);}
-  .cal-bar{margin-top:2px;background:var(--accent);color:#fff;font-size:8px;line-height:1.4;border-radius:3px;padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .cal-bar-cancel{background:var(--ink-faint);text-decoration:line-through;}
+  .cal-bar{margin-top:2px;background:var(--accent);color:#fff;border-radius:3px;padding:1.5px 3px;overflow:hidden;}
+  .cal-bar-main{font-size:8px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
+  .cal-bar-who{font-size:7px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85;}
+  .cal-bar-cancel{background:var(--ink-faint);}
+  .cal-bar-cancel .cal-bar-main{text-decoration:line-through;}
   .cal-more{position:absolute;bottom:2px;right:3px;font-size:8px;color:var(--ink-faint);font-weight:600;}
   .cal-legend{font-size:10.5px;color:var(--ink-faint);text-align:center;margin-top:10px;}
   .cal-legend-cancel{text-decoration:line-through;}
@@ -101,6 +104,7 @@ const firebaseConfig = {
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
 };
+
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
@@ -260,12 +264,13 @@ function calendarHtml(){
       const muted=d.getMonth()!==m, isToday=s===ts;
       if(!muted) rowHasCur=true;
       const evs=companyVisits.filter(v=>v.date&&dnum(parseD(v.date))<=dnum(d)&&dnum(d)<=dnum(parseD(v.endDate||v.date)));
-      const bars=evs.slice(0,3).map(v=>{
+      const bars=evs.slice(0,2).map(v=>{
         const cancelled=v.status==='취소';
-        const txt=`${v.project?`[${v.project}] `:''}${v.title||''}${v.qty?` ${v.qty}대`:''}`;
-        return `<div class="cal-bar ${cancelled?'cal-bar-cancel':''}">${esc(txt)}</div>`;
+        const main=`${v.project?`[${v.project}] `:''}${v.title||''}${v.qty?` ${v.qty}대`:''}`;
+        const who=v.attendee?`👤 ${v.attendee}`:'👤 입회자 미정';
+        return `<div class="cal-bar ${cancelled?'cal-bar-cancel':''}"><div class="cal-bar-main">${esc(main)}</div><div class="cal-bar-who">${esc(who)}</div></div>`;
       }).join('');
-      const moreN=evs.length-3;
+      const moreN=evs.length-2;
       row+=`<div class="cal-cell ${muted?'muted':''} ${isToday?'today':''}"><span class="cal-dnum">${d.getDate()}</span>${bars}${moreN>0?`<span class="cal-more">+${moreN}</span>`:''}</div>`;
     }
     if(rowHasCur||w<4) cells+=`<div class="cal-week">${row}</div>`;

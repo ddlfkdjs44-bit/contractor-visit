@@ -73,23 +73,36 @@
   .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;}
   .cal-weekdays div{text-align:center;font-size:9.5px;font-weight:700;color:var(--ink-faint);}
   .cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;}
-  .cal-cell{position:relative;min-height:66px;border:1px solid var(--line-soft);border-radius:6px;padding:3px 3px;overflow:hidden;}
+  .cal-cell{position:relative;min-height:56px;border:1px solid var(--line-soft);border-radius:6px;padding:3px 3px;overflow:hidden;}
   .cal-cell.muted{opacity:.35;}
   .cal-cell.today{border-color:var(--accent);background:rgba(var(--accent-rgb),.06);}
   .cal-dnum{font-size:9.5px;font-weight:600;color:var(--ink-soft);}
-  .cal-bar{margin-top:2px;background:var(--accent);color:#fff;border-radius:3px;padding:1.5px 3px;overflow:hidden;}
-  .cal-bar-main{font-size:8px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
-  .cal-bar-who{font-size:7px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85;}
-  .cal-bar-cancel{background:var(--ink-faint);}
-  .cal-bar-cancel .cal-bar-main{text-decoration:line-through;}
+  .cal-bar{margin-top:2px;background:var(--accent);color:#fff;font-size:8.5px;font-weight:600;line-height:1.5;border-radius:3px;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+  .cal-bar:hover{filter:brightness(.92);}
+  .cal-bar-cancel{background:var(--ink-faint);text-decoration:line-through;}
   .cal-more{position:absolute;bottom:2px;right:3px;font-size:8px;color:var(--ink-faint);font-weight:600;}
   .cal-legend{font-size:10.5px;color:var(--ink-faint);text-align:center;margin-top:10px;}
   .cal-legend-cancel{text-decoration:line-through;}
   .cal-empty{font-size:12.5px;color:var(--ink-faint);text-align:center;padding:14px 0;}
+  /* ── 일정 상세 팝업 ── */
+  .detail-scrim{position:fixed;inset:0;background:rgba(20,22,26,.42);display:none;align-items:center;justify-content:center;z-index:60;padding:16px;}
+  .detail-scrim.show{display:flex;}
+  .detail-modal{background:var(--paper);border-radius:14px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden;}
+  .detail-head{display:flex;align-items:center;justify-content:space-between;padding:15px 17px;border-bottom:1px solid var(--line);}
+  .detail-head h3{margin:0;font-size:14.5px;font-weight:700;}
+  .detail-close{width:26px;height:26px;border-radius:8px;border:none;background:var(--bg);cursor:pointer;color:var(--ink-soft);}
+  .detail-body{padding:15px 17px;}
+  .detail-row{display:flex;gap:12px;padding:7px 0;border-bottom:1px solid var(--line-soft);}
+  .detail-row:last-child{border-bottom:none;}
+  .detail-lbl{flex-shrink:0;width:70px;font-size:11.5px;font-weight:700;color:var(--ink-faint);}
+  .detail-val{font-size:13px;color:var(--ink);line-height:1.5;white-space:pre-wrap;}
 </style>
 </head>
 <body>
   <div class="card" id="card"><div class="state-loading">불러오는 중…</div></div>
+  <div class="detail-scrim" id="detail-scrim" onclick="if(event.target===this)closeDetail()">
+    <div class="detail-modal" id="detail-modal"></div>
+  </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -250,6 +263,27 @@ function renderCalendar(){
 }
 function shiftCal(n){ calView=new Date(calView.getFullYear(), calView.getMonth()+n, 1); document.getElementById('body-area').innerHTML=calendarHtml(); }
 
+function openVisitDetail(id){
+  const v=companyVisits.find(x=>x.id===id); if(!v)return;
+  const cancelled=v.status==='취소';
+  const mm=v.date.split('-')[1], dd=v.date.split('-')[2];
+  const rangeTxt=(v.endDate&&v.endDate!==v.date)?`${v.date.split('-')[0]}. ${+mm}. ${+dd} ~ ${v.endDate.split('-').slice(1).map(Number).join('. ')}`:`${v.date.split('-')[0]}. ${+mm}. ${+dd}`;
+  const row=(lbl,val)=>`<div class="detail-row"><span class="detail-lbl">${lbl}</span><span class="detail-val">${esc(val)}</span></div>`;
+  document.getElementById('detail-modal').innerHTML=`
+    <div class="detail-head"><h3>${cancelled?'✕ 취소된 일정':'📅 확정 일정'}</h3><button class="detail-close" onclick="closeDetail()">✕</button></div>
+    <div class="detail-body">
+      ${row('날짜', rangeTxt)}
+      ${v.project?row('프로젝트명', v.project):''}
+      ${row('제목', v.title||'(제목 없음)')}
+      ${v.qty?row('대수', v.qty+'대'):''}
+      ${row('입회자', v.attendee||'미정')}
+      ${v.memo?row('메모', v.memo):''}
+      ${row('상태', cancelled?'취소됨':'예정')}
+    </div>`;
+  document.getElementById('detail-scrim').classList.add('show');
+}
+function closeDetail(){ document.getElementById('detail-scrim').classList.remove('show'); }
+
 function calendarHtml(){
   const y=calView.getFullYear(), m=calView.getMonth();
   const first=new Date(y,m,1), startDow=first.getDay();
@@ -264,13 +298,12 @@ function calendarHtml(){
       const muted=d.getMonth()!==m, isToday=s===ts;
       if(!muted) rowHasCur=true;
       const evs=companyVisits.filter(v=>v.date&&dnum(parseD(v.date))<=dnum(d)&&dnum(d)<=dnum(parseD(v.endDate||v.date)));
-      const bars=evs.slice(0,2).map(v=>{
+      const bars=evs.slice(0,3).map(v=>{
         const cancelled=v.status==='취소';
-        const main=`${v.project?`[${v.project}] `:''}${v.title||''}${v.qty?` ${v.qty}대`:''}`;
-        const who=`입회자 ${v.attendee||'미정'}`;
-        return `<div class="cal-bar ${cancelled?'cal-bar-cancel':''}"><div class="cal-bar-main">${esc(main)}</div><div class="cal-bar-who">${esc(who)}</div></div>`;
+        const txt=`${v.title||'(제목 없음)'}`;
+        return `<div class="cal-bar ${cancelled?'cal-bar-cancel':''}" onclick="event.stopPropagation();openVisitDetail('${v.id}')">${esc(txt)}</div>`;
       }).join('');
-      const moreN=evs.length-2;
+      const moreN=evs.length-3;
       row+=`<div class="cal-cell ${muted?'muted':''} ${isToday?'today':''}"><span class="cal-dnum">${d.getDate()}</span>${bars}${moreN>0?`<span class="cal-more">+${moreN}</span>`:''}</div>`;
     }
     if(rowHasCur||w<4) cells+=`<div class="cal-week">${row}</div>`;

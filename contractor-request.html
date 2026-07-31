@@ -1,0 +1,156 @@
+<!-- 외주협력사 입회 신청 페이지 v1 — Firebase Firestore 연동. 협력사는 로그인 없이 고유 링크(?co=업체ID)로 접속해 신청만 등록합니다. -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>입회 일정 신청</title>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+  :root{
+    --r:14px; --r-sm:10px;
+    --font:'Pretendard','Pretendard Variable',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    --accent:#0e6b73; --accent-deep:#0a5057; --accent-rgb:14,107,115;
+    --bg:#f6f7f9; --paper:#ffffff; --ink:#1d2127; --ink-soft:#646b75; --ink-faint:#9aa0a8;
+    --line:#e8eaed; --line-soft:#f1f2f4;
+    --shadow-md:0 4px 14px rgba(20,20,30,.08);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;}
+  .card{width:100%;max-width:460px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-md);padding:26px 24px 24px;}
+  .head{display:flex;align-items:center;gap:11px;margin-bottom:18px;}
+  .head .mark{width:38px;height:38px;border-radius:11px;background:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .head h1{font-size:16px;font-weight:800;margin:0;}
+  .head .sub{font-size:12px;color:var(--ink-faint);margin-top:1px;}
+  .field-lbl{font-size:11.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.02em;margin-bottom:6px;}
+  .m-block{margin-bottom:14px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+  .m-in,.m-ta{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-family:inherit;font-size:14px;padding:10px 12px;outline:none;color:var(--ink);}
+  .m-in:focus,.m-ta:focus{border-color:var(--accent);background:var(--paper);}
+  .m-ta{resize:vertical;min-height:70px;}
+  .company-badge{display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:18px;}
+  .company-badge .dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+  .company-badge b{font-size:15px;}
+  .company-badge span{font-size:11.5px;color:var(--ink-faint);}
+  .btn-submit{width:100%;font-family:inherit;font-size:14.5px;font-weight:700;background:var(--accent);color:#fff;border:none;padding:13px;border-radius:11px;cursor:pointer;margin-top:6px;}
+  .btn-submit:hover{background:var(--accent-deep);}
+  .btn-submit:disabled{opacity:.5;cursor:default;}
+  .msg{font-size:12.5px;padding:10px 13px;border-radius:9px;margin-bottom:14px;}
+  .msg.error{background:rgba(210,84,58,.1);color:#c0392b;}
+  .msg.ok{background:rgba(90,158,47,.1);color:#3d6e1e;}
+  .state-loading,.state-error{text-align:center;padding:40px 10px;color:var(--ink-faint);font-size:13.5px;}
+  .success-wrap{text-align:center;padding:20px 6px;}
+  .success-wrap .ico{font-size:40px;margin-bottom:10px;}
+  .success-wrap h2{font-size:16px;margin:0 0 8px;}
+  .success-wrap p{font-size:13px;color:var(--ink-soft);line-height:1.6;margin:0 0 20px;}
+  .btn-ghost{font-family:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);padding:9px 16px;border-radius:9px;cursor:pointer;}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+</style>
+</head>
+<body>
+  <div class="card" id="card"><div class="state-loading">불러오는 중…</div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+/* ══════════════ Firebase 설정 — 본인 프로젝트 값으로 교체하세요 ══════════════ */
+npm install firebase
+
+/* ══════════════ 상태 ══════════════ */
+const params = new URLSearchParams(location.search);
+const companyId = params.get('co');
+let company = null;
+
+function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function pad(n){return String(n).padStart(2,'0');}
+function todayStr(){const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;}
+
+function renderError(msg){
+  document.getElementById('card').innerHTML = `<div class="state-error">⚠️ ${esc(msg)}</div>`;
+}
+
+function renderForm(){
+  document.getElementById('card').innerHTML = `
+    <div class="head">
+      <span class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span>
+      <div><h1>입회 일정 신청</h1><div class="sub">협력사 신청 → 담당자 확인 후 승인</div></div>
+    </div>
+    <div class="company-badge">
+      <span class="dot" style="background:${company.color||'#0e6b73'}"></span>
+      <div><b>${esc(company.name)}</b><br><span>이 링크로 신청하면 자동으로 업체가 지정돼요</span></div>
+    </div>
+    <div id="form-area">
+      <div class="row2">
+        <div><div class="field-lbl">희망 시작일</div><input type="date" class="m-in" id="f-start" value="${todayStr()}"></div>
+        <div><div class="field-lbl">희망 종료일</div><input type="date" class="m-in" id="f-end" value="${todayStr()}"></div>
+      </div>
+      <div class="m-block"><div class="field-lbl">신청 제목</div><input type="text" class="m-in" id="f-title" placeholder="예: 변압기 출하검사 입회 요청"></div>
+      <div class="m-block"><div class="field-lbl">신청자 성함</div><input type="text" class="m-in" id="f-requester" placeholder="예: 홍길동"></div>
+      <div class="m-block"><div class="field-lbl">비고 (선택)</div><textarea class="m-ta" id="f-memo" placeholder="준비물, 특이사항 등"></textarea></div>
+      <div id="msg-area"></div>
+      <button class="btn-submit" id="submit-btn" onclick="submitRequest()">신청하기</button>
+    </div>`;
+}
+
+function renderSuccess(){
+  document.getElementById('card').innerHTML = `
+    <div class="success-wrap">
+      <div class="ico">✅</div>
+      <h2>신청이 접수됐어요</h2>
+      <p>담당자 확인 후 일정에 반영됩니다.<br>승인 여부는 별도로 안내받으실 수 있어요.</p>
+      <button class="btn-ghost" onclick="renderForm()">다른 일정 신청하기</button>
+    </div>`;
+}
+
+function showMsg(text,type){
+  const el=document.getElementById('msg-area');
+  if(el)el.innerHTML = `<div class="msg ${type}">${esc(text)}</div>`;
+}
+
+function submitRequest(){
+  const start=document.getElementById('f-start').value;
+  const end=document.getElementById('f-end').value || start;
+  const title=document.getElementById('f-title').value.trim();
+  const requester=document.getElementById('f-requester').value.trim();
+  const memo=document.getElementById('f-memo').value.trim();
+  if(!start){showMsg('희망 시작일을 선택해주세요.','error');return;}
+  if(end<start){showMsg('종료일이 시작일보다 빠를 수 없어요.','error');return;}
+  if(!title){showMsg('신청 제목을 입력해주세요.','error');return;}
+  if(!requester){showMsg('신청자 성함을 입력해주세요.','error');return;}
+
+  const btn=document.getElementById('submit-btn');
+  btn.disabled=true; btn.textContent='신청 중…';
+
+  db.collection('requests').add({
+    companyId: companyId,
+    companyName: company.name,
+    date: start,
+    endDate: end,
+    title: title,
+    requester: requester,
+    memo: memo,
+    status: 'pending',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(()=>{
+    renderSuccess();
+  }).catch(err=>{
+    btn.disabled=false; btn.textContent='신청하기';
+    showMsg('신청 중 오류가 발생했어요: '+err.message,'error');
+  });
+}
+
+/* ══════════════ 초기화 ══════════════ */
+if(!companyId){
+  renderError('협력사 코드가 없어요. 담당자에게 받은 링크로 다시 접속해주세요.');
+}else{
+  db.collection('companies').doc(companyId).get().then(doc=>{
+    if(!doc.exists){renderError('등록되지 않은 협력사 링크예요. 담당자에게 확인해주세요.');return;}
+    company = doc.data();
+    renderForm();
+  }).catch(err=>{
+    renderError('불러오는 중 오류가 발생했어요: '+err.message);
+  });
+}
+</script>
+</body>
+</html>

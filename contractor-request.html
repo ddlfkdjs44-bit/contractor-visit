@@ -267,7 +267,7 @@ function calendarHtml(){
       const bars=evs.slice(0,2).map(v=>{
         const cancelled=v.status==='취소';
         const main=`${v.project?`[${v.project}] `:''}${v.title||''}${v.qty?` ${v.qty}대`:''}`;
-        const who=v.attendee?`👤 ${v.attendee}`:'👤 입회자 미정';
+        const who=`입회자 ${v.attendee||'미정'}`;
         return `<div class="cal-bar ${cancelled?'cal-bar-cancel':''}"><div class="cal-bar-main">${esc(main)}</div><div class="cal-bar-who">${esc(who)}</div></div>`;
       }).join('');
       const moreN=evs.length-2;

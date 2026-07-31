@@ -55,6 +55,34 @@
   .myreq-date{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
   .myreq-del{flex-shrink:0;font-family:inherit;font-size:12px;font-weight:600;color:#c0392b;background:none;border:1px solid #c0392b;padding:6px 10px;border-radius:7px;cursor:pointer;}
   .myreq-del:hover{background:#c0392b;color:#fff;}
+  .myreq-row{align-items:flex-start;}
+  .myreq-badge{display:inline-block;font-size:10.5px;font-weight:700;padding:1.5px 8px;border-radius:20px;margin-left:2px;}
+  .myreq-badge.ok{background:rgba(90,158,47,.15);color:#3d6e1e;}
+  .myreq-badge.no{background:rgba(210,84,58,.12);color:#c0392b;}
+  .myreq-note{font-size:11.5px;color:var(--ink-soft);margin-top:4px;background:var(--paper);border:1px solid var(--line-soft);border-radius:7px;padding:5px 9px;}
+  /* ── 탭 ── */
+  .tabbar{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;margin-bottom:18px;}
+  .tabbar button{flex:1;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--ink-soft);background:none;border:none;padding:8px 6px;border-radius:8px;cursor:pointer;}
+  .tabbar button.on{background:var(--paper);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  /* ── 우리 회사 일정 캘린더 (읽기 전용) ── */
+  .cal-loading{font-size:12.5px;color:var(--ink-faint);text-align:center;padding:30px 0;}
+  .cal-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px;}
+  .cal-navbtn{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink-soft);cursor:pointer;font-size:13px;}
+  .cal-navbtn:hover{border-color:var(--accent);color:var(--accent);}
+  .cal-month{font-size:13.5px;font-weight:700;color:var(--ink);min-width:88px;text-align:center;}
+  .cal-weekdays{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;}
+  .cal-weekdays div{text-align:center;font-size:9.5px;font-weight:700;color:var(--ink-faint);}
+  .cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;}
+  .cal-cell{position:relative;min-height:52px;border:1px solid var(--line-soft);border-radius:6px;padding:3px 3px;overflow:hidden;}
+  .cal-cell.muted{opacity:.35;}
+  .cal-cell.today{border-color:var(--accent);background:rgba(var(--accent-rgb),.06);}
+  .cal-dnum{font-size:9.5px;font-weight:600;color:var(--ink-soft);}
+  .cal-bar{margin-top:2px;background:var(--accent);color:#fff;font-size:8px;line-height:1.4;border-radius:3px;padding:1px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cal-bar-cancel{background:var(--ink-faint);text-decoration:line-through;}
+  .cal-more{position:absolute;bottom:2px;right:3px;font-size:8px;color:var(--ink-faint);font-weight:600;}
+  .cal-legend{font-size:10.5px;color:var(--ink-faint);text-align:center;margin-top:10px;}
+  .cal-legend-cancel{text-decoration:line-through;}
+  .cal-empty{font-size:12.5px;color:var(--ink-faint);text-align:center;padding:14px 0;}
 </style>
 </head>
 <body>
@@ -73,7 +101,6 @@ const firebaseConfig = {
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
@@ -96,7 +123,10 @@ function renderError(msg){
   document.getElementById('card').innerHTML = `<div class="state-error">⚠️ ${esc(msg)}</div>`;
 }
 
-function renderForm(){
+let pageMode='form'; // 'form' | 'cal'
+function setMode(m){ pageMode=m; renderShell(); }
+
+function renderShell(){
   document.getElementById('card').innerHTML = `
     <div class="head">
       <span class="mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2.5"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span>
@@ -106,6 +136,16 @@ function renderForm(){
       <span class="dot" style="background:${company.color||'#0e6b73'}"></span>
       <div><b>${esc(company.name)}</b><br><span>이 링크로 신청하면 자동으로 업체가 지정돼요</span></div>
     </div>
+    <div class="tabbar">
+      <button class="${pageMode==='form'?'on':''}" onclick="setMode('form')">신청하기</button>
+      <button class="${pageMode==='cal'?'on':''}" onclick="setMode('cal')">📅 우리 회사 일정</button>
+    </div>
+    <div id="body-area"></div>`;
+  if(pageMode==='form') renderForm(); else renderCalendar();
+}
+
+function renderForm(){
+  document.getElementById('body-area').innerHTML = `
     <div id="form-area">
       <div class="row2">
         <div><div class="field-lbl">희망 시작일</div><input type="date" class="m-in" id="f-start" value="${todayStr()}"></div>
@@ -126,15 +166,23 @@ function renderForm(){
 }
 
 function renderSuccess(){
-  document.getElementById('card').innerHTML = `
+  document.getElementById('body-area').innerHTML = `
     <div class="success-wrap">
       <div class="ico">✅</div>
       <h2>신청이 접수됐어요</h2>
-      <p>담당자 확인 후 일정에 반영됩니다.<br>승인 여부는 별도로 안내받으실 수 있어요.</p>
+      <p>담당자 확인 후 일정에 반영됩니다.<br>승인·거절 결과는 이 화면 아래 목록에서 바로 확인하실 수 있어요.</p>
       <button class="btn-ghost" onclick="renderForm()">다른 일정 신청하기</button>
     </div>
     <div id="my-reqs"></div>`;
   renderMyRequests();
+}
+
+function reqRangeTxt(d){
+  const mm=d.date.split('-')[1], dd=d.date.split('-')[2];
+  return (d.endDate&&d.endDate!==d.date) ? `${+mm}/${+dd}~${d.endDate.split('-').slice(1).map(Number).join('/')}` : `${+mm}/${+dd}`;
+}
+function reqTitleTxt(d){
+  return `${d.project?`[${esc(d.project)}] `:''}${esc(d.title||'(제목 없음)')}${d.qty?` · ${d.qty}대`:''}`;
 }
 
 function renderMyRequests(){
@@ -147,28 +195,92 @@ function renderMyRequests(){
     .then(doc=>({id, fetched:true, exists:doc.exists, data:doc.exists?doc.data():null}))
     .catch(err=>({id, fetched:false, err}))
   )).then(results=>{
-    const alive=[]; let hadError=false;
+    const shown=[]; let hadError=false;
     results.forEach(r=>{
-      if(!r.fetched){ hadError=true; return; } // 조회 실패(권한설정 문제 등) — 목록에서 지우지 않고 이번엔 그냥 넘어감
-      if(!r.exists || !r.data || r.data.status!=='pending'){ removeMyReqId(r.id); }
-      else alive.push(r);
+      if(!r.fetched){ hadError=true; return; } // 조회 실패(네트워크 등) — 목록에서 지우지 않고 이번엔 그냥 넘어감
+      if(!r.exists){ removeMyReqId(r.id); return; } // 관리자가 실제로 삭제한 건만 목록에서 제거
+      shown.push(r); // 대기중 / 승인됨 / 거절됨 다 보여줌
     });
     const listEl=document.getElementById('myreq-list');
     if(!listEl)return;
-    if(hadError && !alive.length){
+    if(hadError && !shown.length){
       document.getElementById('my-reqs').innerHTML = `<div class="myreq-head">📋 내가 신청한 내역</div><div class="myreq-err">불러오지 못했어요. 잠시 후 페이지를 새로고침해보세요.</div>`;
       return;
     }
-    if(!alive.length){document.getElementById('my-reqs').innerHTML='';return;}
-    listEl.innerHTML = alive.map(r=>{
-      const d=r.data, mm=d.date.split('-')[1], dd=d.date.split('-')[2];
-      const rangeTxt = (d.endDate&&d.endDate!==d.date) ? `${+mm}/${+dd}~${d.endDate.split('-').slice(1).map(Number).join('/')}` : `${+mm}/${+dd}`;
+    if(!shown.length){document.getElementById('my-reqs').innerHTML='';return;}
+    listEl.innerHTML = shown.map(r=>{
+      const d=r.data;
+      if(d.status==='approved'){
+        return `<div class="myreq-row">
+          <div><div class="myreq-title">${reqTitleTxt(d)}</div><div class="myreq-date">${reqRangeTxt(d)} · <span class="myreq-badge ok">✅ 승인됨</span></div>${d.adminNote?`<div class="myreq-note">담당자 메모: ${esc(d.adminNote)}</div>`:''}</div>
+        </div>`;
+      }
+      if(d.status==='rejected'){
+        return `<div class="myreq-row">
+          <div><div class="myreq-title">${reqTitleTxt(d)}</div><div class="myreq-date">${reqRangeTxt(d)} · <span class="myreq-badge no">✕ 거절됨</span></div>${d.adminNote?`<div class="myreq-note">거절 사유: ${esc(d.adminNote)}</div>`:'<div class="myreq-note">별도 사유가 입력되지 않았어요. 담당자에게 문의해주세요.</div>'}</div>
+        </div>`;
+      }
       return `<div class="myreq-row">
-        <div><div class="myreq-title">${d.project?`[${esc(d.project)}] `:''}${esc(d.title||'(제목 없음)')}${d.qty?` · ${d.qty}대`:''}</div><div class="myreq-date">${rangeTxt} · 대기중</div></div>
+        <div><div class="myreq-title">${reqTitleTxt(d)}</div><div class="myreq-date">${reqRangeTxt(d)} · 대기중</div></div>
         <button class="myreq-del" onclick="deleteMyRequest('${r.id}')">🗑 삭제</button>
       </div>`;
     }).join('');
   });
+}
+
+/* ══════════════ 우리 회사 일정 (확정된 입회 일정, 읽기 전용 캘린더) ══════════════ */
+let calView=new Date();
+let companyVisits=[];
+function parseD(s){const[y,m,dd]=s.split('-').map(Number);return new Date(y,m-1,dd);}
+function dnum(d){return Math.floor(d.getTime()/86400000);}
+const WD=['일','월','화','수','목','금','토'];
+
+function renderCalendar(){
+  document.getElementById('body-area').innerHTML = `<div class="cal-loading">불러오는 중…</div>`;
+  db.collection('visits').where('companyId','==',companyId).get().then(snap=>{
+    companyVisits = snap.docs.map(d=>Object.assign({id:d.id}, d.data()));
+    document.getElementById('body-area').innerHTML = calendarHtml();
+  }).catch(err=>{
+    document.getElementById('body-area').innerHTML = `<div class="myreq-err">불러오지 못했어요: ${esc(err.message)}</div>`;
+  });
+}
+function shiftCal(n){ calView=new Date(calView.getFullYear(), calView.getMonth()+n, 1); document.getElementById('body-area').innerHTML=calendarHtml(); }
+
+function calendarHtml(){
+  const y=calView.getFullYear(), m=calView.getMonth();
+  const first=new Date(y,m,1), startDow=first.getDay();
+  const gridStart=new Date(y,m,1-startDow);
+  const ts=todayStr();
+  let cells='';
+  for(let w=0; w<6; w++){
+    let rowHasCur=false, row='';
+    for(let d0=0; d0<7; d0++){
+      const d=new Date(gridStart); d.setDate(gridStart.getDate()+w*7+d0);
+      const s=`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      const muted=d.getMonth()!==m, isToday=s===ts;
+      if(!muted) rowHasCur=true;
+      const evs=companyVisits.filter(v=>v.date&&dnum(parseD(v.date))<=dnum(d)&&dnum(d)<=dnum(parseD(v.endDate||v.date)));
+      const bars=evs.slice(0,3).map(v=>{
+        const cancelled=v.status==='취소';
+        const txt=`${v.project?`[${v.project}] `:''}${v.title||''}${v.qty?` ${v.qty}대`:''}`;
+        return `<div class="cal-bar ${cancelled?'cal-bar-cancel':''}">${esc(txt)}</div>`;
+      }).join('');
+      const moreN=evs.length-3;
+      row+=`<div class="cal-cell ${muted?'muted':''} ${isToday?'today':''}"><span class="cal-dnum">${d.getDate()}</span>${bars}${moreN>0?`<span class="cal-more">+${moreN}</span>`:''}</div>`;
+    }
+    if(rowHasCur||w<4) cells+=`<div class="cal-week">${row}</div>`;
+  }
+  const hasAny = companyVisits.length>0;
+  return `
+    <div class="cal-nav">
+      <button class="cal-navbtn" onclick="shiftCal(-1)">‹</button>
+      <span class="cal-month">${y}년 ${m+1}월</span>
+      <button class="cal-navbtn" onclick="shiftCal(1)">›</button>
+    </div>
+    <div class="cal-weekdays">${WD.map(w=>`<div>${w}</div>`).join('')}</div>
+    ${cells}
+    ${hasAny?`<div class="cal-legend">진하게 표시된 항목이 확정된 일정이에요 (<span class="cal-legend-cancel">취소선</span>은 취소된 일정)</div>`:`<div class="cal-empty">아직 확정된 일정이 없어요.</div>`}
+  `;
 }
 
 function deleteMyRequest(id){
@@ -234,7 +346,7 @@ if(!companyId){
   db.collection('companies').doc(companyId).get().then(doc=>{
     if(!doc.exists){renderError('등록되지 않은 협력사 링크예요. 담당자에게 확인해주세요.');return;}
     company = doc.data();
-    renderForm();
+    renderShell();
   }).catch(err=>{
     renderError('불러오는 중 오류가 발생했어요: '+err.message);
   });

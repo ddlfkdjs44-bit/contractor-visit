@@ -27,6 +27,7 @@
   .login-card .sub{font-size:12px;color:var(--ink-faint);margin-bottom:20px;}
   .field-lbl{font-size:11.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.02em;margin-bottom:6px;}
   .m-block{margin-bottom:14px;}
+  .approve-summary{font-size:13px;color:var(--ink-soft);background:var(--bg);border-radius:8px;padding:9px 11px;}
   .m-in{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-family:inherit;font-size:14px;padding:10px 12px;outline:none;color:var(--ink);}
   .m-in:focus{border-color:var(--accent);background:var(--paper);}
   .m-ta{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--bg);font-family:inherit;font-size:13.5px;padding:9px 11px;outline:none;color:var(--ink);resize:vertical;min-height:60px;}
@@ -81,6 +82,33 @@
   .req-meta{font-size:12px;color:var(--ink-soft);margin-bottom:2px;}
   .req-qty{font-size:11px;font-weight:700;color:var(--accent-deep);background:var(--accent-tint,rgba(14,107,115,.1));padding:1px 8px;border-radius:20px;}
   .visits-toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;cursor:pointer;}
+  .hist-search{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+  .hist-search .m-in{flex:1;min-width:180px;}
+  .hist-filter{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:2px;flex-shrink:0;}
+  .hist-filter button{font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);background:none;border:none;padding:7px 12px;border-radius:7px;cursor:pointer;white-space:nowrap;}
+  .hist-filter button.on{background:var(--paper);color:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  .chat-list{display:flex;flex-direction:column;gap:8px;}
+  .chat-row{display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:12px 14px;cursor:pointer;}
+  .chat-row:hover{border-color:var(--accent);}
+  .chat-row-body{min-width:0;flex:1;}
+  .chat-row-name{font-size:14px;font-weight:700;color:var(--ink);}
+  .chat-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#c0392b;margin-left:4px;}
+  .chat-row-preview{font-size:12px;color:var(--ink-faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .chat-thread{display:flex;flex-direction:column;height:520px;}
+  .chat-thread-head{display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:12px;}
+  .chat-back{font-family:inherit;font-size:12.5px;font-weight:600;color:var(--ink-soft);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 11px;cursor:pointer;}
+  .chat-dot-name{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:700;}
+  .chat-bubbles{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;}
+  .chat-empty{font-size:12.5px;color:var(--ink-faint);text-align:center;margin-top:30px;}
+  .chat-bubble-row{display:flex;}
+  .chat-bubble-row.mine{justify-content:flex-end;}
+  .chat-bubble{max-width:72%;background:var(--bg);border:1px solid var(--line-soft);border-radius:13px 13px 13px 3px;padding:8px 12px;}
+  .chat-bubble.mine{background:var(--accent);color:#fff;border-color:var(--accent);border-radius:13px 13px 3px 13px;}
+  .chat-bubble-name{font-size:10.5px;font-weight:700;color:var(--accent-deep);margin-bottom:2px;}
+  .chat-bubble-text{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;}
+  .chat-input-row{display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--line);margin-top:10px;}
+  .chat-input-row .m-in{flex:1;}
+  .chat-send{font-family:inherit;font-size:13px;font-weight:700;background:var(--accent);color:#fff;border:none;padding:0 18px;border-radius:9px;cursor:pointer;}
   .visits-toggle input{cursor:pointer;}
   .req-memo{font-size:12px;color:var(--ink-faint);margin-top:6px;white-space:pre-wrap;}
   .req-actions{display:flex;gap:8px;margin-top:12px;}
@@ -105,7 +133,7 @@
 <body>
 <div id="root"><div style="padding:60px;text-align:center;color:var(--ink-faint);">불러오는 중…</div></div>
 <div class="toast" id="toast"></div>
-<div class="scrim" id="scrim" onclick="if(event.target===this)closeVisitEditor()">
+<div class="scrim" id="scrim" onclick="if(event.target===this)closeModal()">
   <div class="modal" id="modal"></div>
 </div>
 
@@ -123,7 +151,6 @@ const firebaseConfig = {
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
 };
-
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -141,6 +168,10 @@ function uid(){return 'c'+Date.now().toString(36)+Math.random().toString(36).sli
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(window._toastT);window._toastT=setTimeout(()=>t.classList.remove('show'),2400);}
 
 let tab='pending';
+let historyQuery='';
+let historyStatusFilter='all';
+let messagesCache=[];
+let activeChatCompanyId=null;
 let companiesCache={};
 let requestsCache=[];
 let visitsCache=[];
@@ -197,6 +228,7 @@ function renderDashboard(){
         <button class="${tab==='history'?'on':''}" onclick="setTab('history')">처리 내역</button>
         <button class="${tab==='visits'?'on':''}" onclick="setTab('visits')">확정 일정</button>
         <button class="${tab==='companies'?'on':''}" onclick="setTab('companies')">협력사 관리</button>
+        <button class="${tab==='chat'?'on':''}" onclick="setTab('chat')">💬 채팅${chatUnreadTotal()?` <span class="badge">${chatUnreadTotal()}</span>`:''}</button>
         ${isAdmin()?`<button class="${tab==='staff'?'on':''}" onclick="setTab('staff')">직원 관리</button>
         <button class="${tab==='settings'?'on':''}" onclick="setTab('settings')">설정</button>`:''}
       </div>
@@ -219,12 +251,23 @@ function renderTabBody(){
     const rows=requestsCache.filter(r=>r.status==='pending').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
     body.innerHTML = rows.length ? rows.map(reqCardHtml).join('') : '<div class="empty">대기 중인 신청이 없어요.</div>';
   }else if(tab==='history'){
-    const rows=requestsCache.filter(r=>r.status!=='pending').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-    body.innerHTML = rows.length ? rows.map(reqCardHtml).join('') : '<div class="empty">처리된 신청 내역이 없어요.</div>';
+    body.innerHTML = `
+      <div class="hist-search">
+        <input type="text" class="m-in" id="hist-search-input" placeholder="협력사·제목·프로젝트·신청자 검색" value="${esc(historyQuery)}" oninput="historyQuery=this.value;renderHistoryList();">
+        <div class="hist-filter">
+          <button class="${historyStatusFilter==='all'?'on':''}" onclick="setHistoryStatusFilter('all')">전체</button>
+          <button class="${historyStatusFilter==='approved'?'on':''}" onclick="setHistoryStatusFilter('approved')">승인됨</button>
+          <button class="${historyStatusFilter==='rejected'?'on':''}" onclick="setHistoryStatusFilter('rejected')">거절됨</button>
+        </div>
+      </div>
+      <div id="hist-list"></div>`;
+    renderHistoryList();
   }else if(tab==='visits'){
     renderVisitsTab(body);
   }else if(tab==='companies'){
     renderCompaniesTab(body);
+  }else if(tab==='chat'){
+    renderChatTab(body);
   }else if(tab==='staff'&&isAdmin()){
     renderStaffTab(body);
   }else if(tab==='settings'&&isAdmin()){
@@ -232,6 +275,19 @@ function renderTabBody(){
   }
 }
 
+function setHistoryStatusFilter(v){ historyStatusFilter=v; renderTabBody(); }
+function renderHistoryList(){
+  let rows=requestsCache.filter(r=>r.status!=='pending');
+  if(historyStatusFilter!=='all') rows=rows.filter(r=>r.status===historyStatusFilter);
+  if(historyQuery.trim()){
+    const q=historyQuery.trim().toLowerCase();
+    rows=rows.filter(r=>[r.companyName,r.title,r.project,r.requester].some(f=>(f||'').toLowerCase().includes(q)));
+  }
+  rows.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const el=document.getElementById('hist-list');
+  if(!el)return;
+  el.innerHTML = rows.length ? rows.map(reqCardHtml).join('') : '<div class="empty">검색 결과가 없어요.</div>';
+}
 function reqCardHtml(r){
   const c=companiesCache[r.companyId];
   const color=c?c.color:'#999', name=c?c.name:(r.companyName||'(삭제된 업체)');
@@ -240,7 +296,7 @@ function reqCardHtml(r){
   if(isAdmin()){
     if(r.status==='pending'){
       actions = `<div class="req-actions">
-        <button class="btn-approve" onclick="approveReq('${r.id}')">✅ 승인</button>
+        <button class="btn-approve" onclick="openApproveModal('${r.id}')">✅ 승인</button>
         <button class="btn-reject" onclick="rejectReq('${r.id}')">✕ 거절</button>
         <button class="btn-reject" onclick="deleteReq('${r.id}')" title="협력사가 잘못 신청한 경우 등, 기록 없이 바로 삭제">🗑 삭제(실수신청)</button>
       </div>`;
@@ -282,12 +338,39 @@ function pushNotification(companyId,title,message){
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   }).catch(err=>console.error('알림 등록 오류:',err));
 }
-function approveReq(id){
+let approveReqId=null;
+function openApproveModal(id){
   const r=requestsCache.find(x=>x.id===id); if(!r)return;
-  const attendee=prompt('입회자 성함 (우리측에서 누가 가는지, 나중에 로컬 캘린더에서 수정 가능):','')||'';
-  const time=prompt('방문 시간 (선택, 예: 14:00 / 오전 10시. 비워도 됩니다):', r.time||'')||'';
-  const note=prompt('승인 메모 (선택, 비워도 됩니다):','')||'';
+  approveReqId=id;
+  document.getElementById('modal').innerHTML=`
+    <div class="m-head"><h3>승인 — ${esc(r.companyName||'')}</h3><button class="m-close" onclick="closeModal()">✕</button></div>
+    <div class="m-body">
+      <div class="m-block"><div class="field-lbl">신청 내용</div><div class="approve-summary">${esc(reqTitleSummary(r))} · ${fmtDate(r)}${r.time?' · '+esc(r.time):''}</div></div>
+      <div class="m-block"><div class="field-lbl">입회자 (우리측에서 누가 가는지)</div><input type="text" class="m-in" id="ap-attendee" placeholder="예: 김희준"></div>
+      <div class="m-block"><div class="field-lbl">방문 시간 (선택)</div><input type="text" class="m-in" id="ap-time" placeholder="예: 14:00 / 오전 10시" value="${esc(r.time||'')}"></div>
+      <div class="m-block"><div class="field-lbl">승인 메모 (선택, 협력사에게 보여요)</div><textarea class="m-ta" id="ap-note" placeholder="예: 오전 9시까지 정문으로 도착해주세요"></textarea></div>
+    </div>
+    <div class="m-foot">
+      <button class="m-del" onclick="closeModal()">취소</button>
+      <button class="m-save" onclick="confirmApprove()">✅ 승인 확정</button>
+    </div>`;
+  document.getElementById('scrim').classList.add('show');
+}
+function reqTitleSummary(r){
+  return `${r.project?`[${r.project}] `:''}${r.title||'(제목 없음)'}${r.qty?` · ${r.qty}대`:''}`;
+}
+function closeModal(){
+  document.getElementById('scrim').classList.remove('show');
+  approveReqId=null; visitEditId=null;
+}
+function confirmApprove(){
+  const id=approveReqId;
+  const r=requestsCache.find(x=>x.id===id); if(!r)return;
+  const attendee=document.getElementById('ap-attendee').value.trim();
+  const time=document.getElementById('ap-time').value.trim();
+  const note=document.getElementById('ap-note').value.trim();
   const company=companiesCache[r.companyId];
+  closeModal();
   db.collection('requests').doc(id).update({
     status:'approved', adminNote:note, decidedAt: firebase.firestore.FieldValue.serverTimestamp()
   }).then(()=>{
@@ -370,10 +453,7 @@ function openVisitEditor(id){
   renderVisitEditor();
   document.getElementById('scrim').classList.add('show');
 }
-function closeVisitEditor(){
-  visitEditId=null;
-  document.getElementById('scrim').classList.remove('show');
-}
+function closeVisitEditor(){ closeModal(); }
 function renderVisitEditor(){
   const v=visitsCache.find(x=>x.id===visitEditId); if(!v)return;
   const c=companiesCache[v.companyId];
@@ -472,6 +552,100 @@ function requestLinkFor(id){
   const base=location.href.replace(/contractor-admin\.html.*$/,'contractor-request.html');
   return `${base}?co=${id}`;
 }
+/* ══════════════ 채팅 (협력사별 1:1 대화방) ══════════════ */
+function msgMillis(m){
+  if(!m.createdAt)return 0;
+  if(typeof m.createdAt.toMillis==='function')return m.createdAt.toMillis();
+  if(m.createdAt.seconds)return m.createdAt.seconds*1000;
+  return 0;
+}
+function chatSeenKey(cid){return 'adminChatSeen_'+cid;}
+function chatSeenAt(cid){return parseInt(localStorage.getItem(chatSeenKey(cid))||'0',10);}
+function markChatSeen(cid){localStorage.setItem(chatSeenKey(cid), String(Date.now()));}
+function chatUnreadFor(cid){
+  const seen=chatSeenAt(cid);
+  return messagesCache.filter(m=>m.companyId===cid && m.sender==='company' && msgMillis(m)>seen).length;
+}
+function chatUnreadTotal(){
+  const ids=Object.keys(companiesCache);
+  return ids.reduce((sum,id)=>sum+chatUnreadFor(id),0);
+}
+function updateChatBadgeOnly(){
+  const btn=document.querySelector('.tabs button[onclick*="setTab(\'chat\')"]');
+  if(!btn)return;
+  const n=chatUnreadTotal();
+  btn.innerHTML = `💬 채팅${n?` <span class="badge">${n}</span>`:''}`;
+}
+function renderChatTab(body){
+  if(activeChatCompanyId){ renderChatThread(body); return; }
+  const ids=Object.keys(companiesCache);
+  if(!ids.length){ body.innerHTML='<div class="empty">등록된 협력사가 없어요.</div>'; return; }
+  const rows=ids.map(id=>{
+    const c=companiesCache[id];
+    const msgs=messagesCache.filter(m=>m.companyId===id);
+    const last=msgs[msgs.length-1];
+    const unread=chatUnreadFor(id);
+    return `<div class="chat-row" onclick="openChatThread('${id}')">
+      <span class="comp-dot" style="background:${c.color||'#999'}"></span>
+      <div class="chat-row-body">
+        <div class="chat-row-name">${esc(c.name)}${unread?` <span class="chat-dot"></span>`:''}</div>
+        <div class="chat-row-preview">${last?esc((last.senderName?last.senderName+': ':'')+last.text).slice(0,40):'대화 없음'}</div>
+      </div>
+    </div>`;
+  }).join('');
+  body.innerHTML = `<div class="chat-list">${rows}</div>`;
+}
+function openChatThread(cid){
+  activeChatCompanyId=cid;
+  markChatSeen(cid);
+  renderTabBody();
+}
+function closeChatThread(){
+  activeChatCompanyId=null;
+  renderTabBody();
+}
+function renderChatThread(body){
+  const c=companiesCache[activeChatCompanyId];
+  const msgs=messagesCache.filter(m=>m.companyId===activeChatCompanyId);
+  const bubbles=msgs.length?msgs.map(m=>{
+    const mine=m.sender==='admin';
+    return `<div class="chat-bubble-row ${mine?'mine':''}">
+      <div class="chat-bubble ${mine?'mine':''}">
+        ${!mine?`<div class="chat-bubble-name">${esc(m.senderName||'협력사')}</div>`:''}
+        <div class="chat-bubble-text">${esc(m.text||'')}</div>
+      </div>
+    </div>`;
+  }).join(''):'<div class="chat-empty">아직 대화가 없어요.</div>';
+  body.innerHTML = `
+    <div class="chat-thread">
+      <div class="chat-thread-head">
+        <button class="chat-back" onclick="closeChatThread()">← 목록</button>
+        <span class="chat-dot-name"><span class="comp-dot" style="background:${c?c.color:'#999'}"></span>${esc(c?c.name:'(삭제된 업체)')}</span>
+      </div>
+      <div class="chat-bubbles" id="chat-bubbles">${bubbles}</div>
+      ${isAdmin()?`<div class="chat-input-row">
+        <input type="text" class="m-in" id="chat-input" placeholder="메시지를 입력하세요" onkeydown="if(event.key==='Enter')sendChatMessage()">
+        <button class="chat-send" onclick="sendChatMessage()">전송</button>
+      </div>`:''}
+    </div>`;
+  const bub=document.getElementById('chat-bubbles');
+  if(bub) bub.scrollTop=bub.scrollHeight;
+}
+function sendChatMessage(){
+  const input=document.getElementById('chat-input');
+  const text=input.value.trim();
+  if(!text||!activeChatCompanyId)return;
+  input.value='';
+  const user=auth.currentUser;
+  db.collection('messages').add({
+    companyId: activeChatCompanyId,
+    sender: 'admin',
+    senderName: (user&&user.email)?user.email.split('@')[0]:'담당자',
+    text: text,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(()=>{ markChatSeen(activeChatCompanyId); }).catch(err=>toast('전송 실패: '+err.message));
+}
+
 function renderCompaniesTab(body){
   const ids=Object.keys(companiesCache);
   const seedBtn = isAdmin()?`<button class="btn-add-comp" onclick="seedCompanies()">＋ 기본 5개사로 초기 등록 (가온해·유일전기·극동전기·구주기술·국제전기)</button>
@@ -620,6 +794,11 @@ function startListeners(){
     settingsCache = doc.exists ? Object.assign({internalEmails:[]},doc.data()) : {internalEmails:[]};
     renderTabBody();
   }, '설정'));
+  unsubs.push(watchCollection(db.collection('messages'), snap=>{
+    messagesCache = snap.docs.map(doc=>Object.assign({id:doc.id},doc.data())).sort((a,b)=>msgMillis(a)-msgMillis(b));
+    if(tab==='chat') renderTabBody();
+    else updateChatBadgeOnly();
+  }, '채팅'));
 }
 
 /* ══════════════ 권한 확인 (staff 등록 여부·역할) ══════════════ */

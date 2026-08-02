@@ -31,6 +31,19 @@
   .notif-title{font-size:12.5px;font-weight:700;color:var(--ink);}
   .notif-msg{font-size:11.5px;color:var(--ink-soft);margin-top:3px;white-space:pre-wrap;line-height:1.5;}
   .notif-empty{font-size:12px;color:var(--ink-faint);text-align:center;padding:10px 0;}
+  .chat-thread{display:flex;flex-direction:column;}
+  .chat-name-row{margin-bottom:12px;}
+  .chat-bubbles{display:flex;flex-direction:column;gap:8px;min-height:260px;max-height:360px;overflow-y:auto;padding:4px 2px;border:1px solid var(--line-soft);border-radius:11px;background:var(--bg);margin-bottom:12px;}
+  .chat-empty{font-size:12.5px;color:var(--ink-faint);text-align:center;margin:auto;padding:20px 10px;}
+  .chat-bubble-row{display:flex;padding:0 8px;}
+  .chat-bubble-row.mine{justify-content:flex-end;}
+  .chat-bubble{max-width:76%;background:var(--paper);border:1px solid var(--line-soft);border-radius:13px 13px 13px 3px;padding:8px 12px;}
+  .chat-bubble.mine{background:var(--accent);color:#fff;border-color:var(--accent);border-radius:13px 13px 3px 13px;}
+  .chat-bubble-name{font-size:10.5px;font-weight:700;color:var(--accent-deep);margin-bottom:2px;}
+  .chat-bubble-text{font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;}
+  .chat-input-row{display:flex;gap:8px;}
+  .chat-input-row .m-in{flex:1;}
+  .chat-send{font-family:inherit;font-size:13px;font-weight:700;background:var(--accent);color:#fff;border:none;padding:0 18px;border-radius:9px;cursor:pointer;}
   .field-lbl{font-size:11.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.02em;margin-bottom:6px;}
   .m-block{margin-bottom:14px;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
@@ -141,7 +154,6 @@ const firebaseConfig = {
   appId: "1:335380660226:web:b56a9cf5727671c23ae71b",
   measurementId: "G-YR2DSRJZFN"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
@@ -203,12 +215,72 @@ function toggleNotifPanel(){
   }
 }
 
+/* ══════════════ 채팅 (우리 회사 ↔ 담당자) ══════════════ */
+let chatUnsub=null;
+let chatMsgs=[];
+function chatNameKey(){return 'chatName_'+companyId;}
+function getChatName(){return localStorage.getItem(chatNameKey())||'';}
+function setChatName(v){localStorage.setItem(chatNameKey(), v);}
+function chatMillis(m){
+  if(!m.createdAt)return 0;
+  if(typeof m.createdAt.toMillis==='function')return m.createdAt.toMillis();
+  if(m.createdAt.seconds)return m.createdAt.seconds*1000;
+  return 0;
+}
+function renderChatTab(){
+  const savedName=getChatName();
+  document.getElementById('body-area').innerHTML = `
+    <div class="chat-thread">
+      <div class="chat-name-row"><div class="field-lbl">보내는 분 성함</div>
+        <input type="text" class="m-in" id="chat-name-input" placeholder="예: 이태균" value="${esc(savedName)}" oninput="setChatName(this.value)"></div>
+      <div class="chat-bubbles" id="chat-bubbles"><div class="chat-empty">불러오는 중…</div></div>
+      <div class="chat-input-row">
+        <input type="text" class="m-in" id="chat-msg-input" placeholder="메시지를 입력하세요" onkeydown="if(event.key==='Enter')sendChatMsg()">
+        <button class="chat-send" onclick="sendChatMsg()">전송</button>
+      </div>
+    </div>`;
+  chatUnsub = db.collection('messages').where('companyId','==',companyId).onSnapshot(snap=>{
+    chatMsgs = snap.docs.map(d=>Object.assign({id:d.id}, d.data())).sort((a,b)=>chatMillis(a)-chatMillis(b));
+    renderChatBubbles();
+  }, err=>{ const el=document.getElementById('chat-bubbles'); if(el)el.innerHTML=`<div class="chat-empty">불러오지 못했어요: ${esc(err.message)}</div>`; });
+}
+function renderChatBubbles(){
+  const el=document.getElementById('chat-bubbles');
+  if(!el)return;
+  el.innerHTML = chatMsgs.length ? chatMsgs.map(m=>{
+    const mine=m.sender==='company';
+    return `<div class="chat-bubble-row ${mine?'mine':''}">
+      <div class="chat-bubble ${mine?'mine':''}">
+        ${!mine?`<div class="chat-bubble-name">담당자</div>`:''}
+        <div class="chat-bubble-text">${esc(m.text||'')}</div>
+      </div>
+    </div>`;
+  }).join('') : '<div class="chat-empty">아직 대화가 없어요. 궁금한 점을 남겨보세요.</div>';
+  el.scrollTop=el.scrollHeight;
+}
+function sendChatMsg(){
+  const input=document.getElementById('chat-msg-input');
+  const text=input.value.trim();
+  if(!text)return;
+  const name=getChatName().trim();
+  if(!name){ alert('보내는 분 성함을 먼저 입력해주세요.'); document.getElementById('chat-name-input').focus(); return; }
+  input.value='';
+  db.collection('messages').add({
+    companyId: companyId,
+    sender: 'company',
+    senderName: name,
+    text: text,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).catch(err=>alert('전송 실패: '+err.message));
+}
+
+
 function renderError(msg){
   document.getElementById('card').innerHTML = `<div class="state-error">⚠️ ${esc(msg)}</div>`;
 }
 
 let pageMode='form'; // 'form' | 'cal'
-function setMode(m){ pageMode=m; renderShell(); }
+function setMode(m){ if(chatUnsub){chatUnsub();chatUnsub=null;} pageMode=m; renderShell(); }
 
 function renderShell(){
   document.getElementById('card').innerHTML = `
@@ -225,9 +297,12 @@ function renderShell(){
     <div class="tabbar">
       <button class="${pageMode==='form'?'on':''}" onclick="setMode('form')">신청하기</button>
       <button class="${pageMode==='cal'?'on':''}" onclick="setMode('cal')">📅 우리 회사 일정</button>
+      <button class="${pageMode==='chat'?'on':''}" onclick="setMode('chat')">💬 문의</button>
     </div>
     <div id="body-area"></div>`;
-  if(pageMode==='form') renderForm(); else renderCalendar();
+  if(pageMode==='form') renderForm();
+  else if(pageMode==='cal') renderCalendar();
+  else renderChatTab();
   loadNotifs();
 }
 
@@ -483,9 +558,9 @@ function submitRequest(){
   if(!requester){showMsg('신청자 성함을 입력해주세요.','error');return;}
 
   const btn=document.getElementById('submit-btn');
-  btn.disabled=true; btn.textContent='신청 중…';
+  btn.disabled=true; btn.textContent='확인 중…';
 
-  db.collection('requests').add({
+  const payload={
     companyId: companyId,
     companyName: company.name,
     date: start,
@@ -498,7 +573,27 @@ function submitRequest(){
     memo: memo,
     status: 'pending',
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  }).then(docRef=>{
+  };
+
+  db.collection('visits').where('companyId','==',companyId).get().then(snap=>{
+    const overlapping = snap.docs.map(d=>d.data()).filter(v=>
+      v.status!=='취소' && v.date && v.date<=end && (v.endDate||v.date)>=start
+    );
+    if(overlapping.length){
+      const list=overlapping.map(v=>`- ${v.date}${v.time?' '+v.time:''} ${v.title||''}`).join('\n');
+      const proceed=confirm(`⚠️ 같은 기간에 이미 확정된 일정이 있어요:\n\n${list}\n\n그래도 신청하시겠어요?`);
+      if(!proceed){ btn.disabled=false; btn.textContent='신청하기'; return; }
+    }
+    doSubmit(payload, btn);
+  }).catch(()=>{
+    // 확인 실패해도 신청 자체는 막지 않음
+    doSubmit(payload, btn);
+  });
+}
+
+function doSubmit(payload, btn){
+  btn.textContent='신청 중…';
+  db.collection('requests').add(payload).then(docRef=>{
     addMyReqId(docRef.id);
     renderSuccess();
   }).catch(err=>{

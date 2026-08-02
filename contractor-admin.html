@@ -109,6 +109,9 @@
   .chat-input-row{display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--line);margin-top:10px;}
   .chat-input-row .m-in{flex:1;}
   .chat-send{font-family:inherit;font-size:13px;font-weight:700;background:var(--accent);color:#fff;border:none;padding:0 18px;border-radius:9px;cursor:pointer;}
+  .ann-foot{display:flex;align-items:center;gap:14px;margin-top:10px;}
+  .ann-foot .visits-toggle{margin-bottom:0;}
+  .ann-date{font-size:11px;color:var(--ink-faint);margin-left:auto;}
   .visits-toggle input{cursor:pointer;}
   .req-memo{font-size:12px;color:var(--ink-faint);margin-top:6px;white-space:pre-wrap;}
   .req-actions{display:flex;gap:8px;margin-top:12px;}
@@ -172,6 +175,7 @@ let historyQuery='';
 let historyStatusFilter='all';
 let messagesCache=[];
 let activeChatCompanyId=null;
+let announcementsCache=[];
 let companiesCache={};
 let requestsCache=[];
 let visitsCache=[];
@@ -229,6 +233,7 @@ function renderDashboard(){
         <button class="${tab==='visits'?'on':''}" onclick="setTab('visits')">확정 일정</button>
         <button class="${tab==='companies'?'on':''}" onclick="setTab('companies')">협력사 관리</button>
         <button class="${tab==='chat'?'on':''}" onclick="setTab('chat')">💬 채팅${chatUnreadTotal()?` <span class="badge">${chatUnreadTotal()}</span>`:''}</button>
+        ${isAdmin()?`<button class="${tab==='announce'?'on':''}" onclick="setTab('announce')">📢 공지사항</button>`:''}
         ${isAdmin()?`<button class="${tab==='staff'?'on':''}" onclick="setTab('staff')">직원 관리</button>
         <button class="${tab==='settings'?'on':''}" onclick="setTab('settings')">설정</button>`:''}
       </div>
@@ -268,6 +273,8 @@ function renderTabBody(){
     renderCompaniesTab(body);
   }else if(tab==='chat'){
     renderChatTab(body);
+  }else if(tab==='announce'&&isAdmin()){
+    renderAnnounceTab(body);
   }else if(tab==='staff'&&isAdmin()){
     renderStaffTab(body);
   }else if(tab==='settings'&&isAdmin()){
@@ -576,6 +583,55 @@ function updateChatBadgeOnly(){
   const n=chatUnreadTotal();
   btn.innerHTML = `💬 채팅${n?` <span class="badge">${n}</span>`:''}`;
 }
+/* ══════════════ 공지사항 ══════════════ */
+function annMillis(a){
+  if(!a.createdAt)return 0;
+  if(typeof a.createdAt.toMillis==='function')return a.createdAt.toMillis();
+  if(a.createdAt.seconds)return a.createdAt.seconds*1000;
+  return 0;
+}
+function renderAnnounceTab(body){
+  const formHtml=`<div class="comp-card">
+    <div class="field-lbl">새 공지 작성</div>
+    <input type="text" class="m-in" id="ann-title" placeholder="제목 (예: 추석 연휴 기간 입회 일정 조정 안내)" style="margin:8px 0;">
+    <textarea class="m-ta" id="ann-body" placeholder="내용을 입력하세요"></textarea>
+    <button class="btn-submit" style="margin-top:10px;" onclick="addAnnouncement()">📢 게시하기</button>
+  </div>`;
+  const rows=announcementsCache.map(a=>{
+    const d=a.createdAt&&a.createdAt.toDate?a.createdAt.toDate():null;
+    const dateTxt=d?`${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`:'';
+    return `<div class="comp-card">
+      <input type="text" class="m-in ann-title-in" value="${esc(a.title||'')}" onchange="updateAnnField('${a.id}','title',this.value)">
+      <textarea class="m-ta" style="margin-top:8px;" onchange="updateAnnField('${a.id}','body',this.value)">${esc(a.body||'')}</textarea>
+      <div class="ann-foot">
+        <label class="visits-toggle"><input type="checkbox" ${a.active?'checked':''} onchange="toggleAnnActive('${a.id}',this.checked)"> 게시 중 (협력사에게 보임)</label>
+        <span class="ann-date">${dateTxt}</span>
+        <button class="btn-reject" onclick="deleteAnnouncement('${a.id}')">🗑 삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+  body.innerHTML = formHtml + (rows||'<div class="empty">등록된 공지사항이 없어요.</div>');
+}
+function addAnnouncement(){
+  const title=document.getElementById('ann-title').value.trim();
+  const bodyTxt=document.getElementById('ann-body').value.trim();
+  if(!title){toast('제목을 입력해주세요.');return;}
+  db.collection('announcements').add({
+    title, body:bodyTxt, active:true,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }).then(()=>toast('공지를 게시했어요.')).catch(err=>toast('오류: '+err.message));
+}
+function updateAnnField(id,field,val){
+  db.collection('announcements').doc(id).update({[field]:val}).then(()=>toast('저장됐어요.')).catch(err=>toast('오류: '+err.message));
+}
+function toggleAnnActive(id,val){
+  db.collection('announcements').doc(id).update({active:val}).catch(err=>toast('오류: '+err.message));
+}
+function deleteAnnouncement(id){
+  if(!confirm('이 공지사항을 삭제할까요?'))return;
+  db.collection('announcements').doc(id).delete().then(()=>toast('삭제했어요.')).catch(err=>toast('오류: '+err.message));
+}
+
 function renderChatTab(body){
   if(activeChatCompanyId){ renderChatThread(body); return; }
   const ids=Object.keys(companiesCache);
@@ -799,6 +855,10 @@ function startListeners(){
     if(tab==='chat') renderTabBody();
     else updateChatBadgeOnly();
   }, '채팅'));
+  unsubs.push(watchCollection(db.collection('announcements'), snap=>{
+    announcementsCache = snap.docs.map(doc=>Object.assign({id:doc.id},doc.data())).sort((a,b)=>annMillis(b)-annMillis(a));
+    renderTabBody();
+  }, '공지사항'));
 }
 
 /* ══════════════ 권한 확인 (staff 등록 여부·역할) ══════════════ */

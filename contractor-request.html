@@ -26,6 +26,12 @@
   .notif-bellbtn:hover{background:var(--bg);}
   .notif-badge{position:absolute;top:0;right:0;background:#c0392b;color:#fff;font-size:9.5px;font-weight:700;min-width:15px;height:15px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;padding:0 3px;}
   .notif-panel{display:none;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:10px;margin:-6px 0 16px;}
+  .ann-banner{display:flex;align-items:flex-start;gap:10px;background:rgba(201,138,44,.1);border:1px solid rgba(201,138,44,.35);border-radius:11px;padding:11px 12px;margin-bottom:10px;}
+  .ann-banner-body{flex:1;min-width:0;}
+  .ann-banner-title{font-size:12.5px;font-weight:700;color:#8a5a10;}
+  .ann-banner-text{font-size:12px;color:#8a5a10;margin-top:3px;line-height:1.5;white-space:pre-wrap;}
+  .ann-banner-close{flex-shrink:0;background:none;border:none;color:#8a5a10;opacity:.6;cursor:pointer;font-size:13px;padding:2px;}
+  .ann-banner-close:hover{opacity:1;}
   .notif-panel.show{display:flex;}
   .notif-item{background:var(--paper);border:1px solid var(--line-soft);border-radius:9px;padding:8px 10px;}
   .notif-title{font-size:12.5px;font-weight:700;color:var(--ink);}
@@ -275,6 +281,29 @@ function sendChatMsg(){
 }
 
 
+/* ══════════════ 공지사항 배너 ══════════════ */
+function dismissedAnnKey(){return 'dismissedAnn_'+companyId;}
+function dismissedAnnIds(){try{return new Set(JSON.parse(localStorage.getItem(dismissedAnnKey())||'[]'));}catch(e){return new Set();}}
+function dismissAnn(id){
+  const set=dismissedAnnIds(); set.add(id);
+  localStorage.setItem(dismissedAnnKey(), JSON.stringify([...set]));
+  const el=document.getElementById('ann-'+id);
+  if(el)el.remove();
+}
+function loadAnnouncements(){
+  db.collection('announcements').where('active','==',true).get().then(snap=>{
+    const dismissed=dismissedAnnIds();
+    const anns=snap.docs.map(d=>Object.assign({id:d.id}, d.data())).filter(a=>!dismissed.has(a.id));
+    const wrap=document.getElementById('ann-banners');
+    if(!wrap)return;
+    wrap.innerHTML = anns.map(a=>`
+      <div class="ann-banner" id="ann-${a.id}">
+        <div class="ann-banner-body"><div class="ann-banner-title">📢 ${esc(a.title||'')}</div>${a.body?`<div class="ann-banner-text">${esc(a.body)}</div>`:''}</div>
+        <button class="ann-banner-close" onclick="dismissAnn('${a.id}')">✕</button>
+      </div>`).join('');
+  }).catch(()=>{});
+}
+
 function renderError(msg){
   document.getElementById('card').innerHTML = `<div class="state-error">⚠️ ${esc(msg)}</div>`;
 }
@@ -290,6 +319,7 @@ function renderShell(){
       <button class="notif-bellbtn" id="notif-bellbtn" onclick="toggleNotifPanel()">🔔<span id="notif-badge" class="notif-badge" style="display:none;"></span></button>
     </div>
     <div id="notif-panel" class="notif-panel"></div>
+    <div id="ann-banners"></div>
     <div class="company-badge">
       <span class="dot" style="background:${company.color||'#0e6b73'}"></span>
       <div><b>${esc(company.name)}</b><br><span>이 링크로 신청하면 자동으로 업체가 지정돼요</span></div>
@@ -304,6 +334,7 @@ function renderShell(){
   else if(pageMode==='cal') renderCalendar();
   else renderChatTab();
   loadNotifs();
+  loadAnnouncements();
 }
 
 function renderForm(){
